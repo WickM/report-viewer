@@ -807,11 +807,20 @@ def quiz_results_page():
   .ctx-menu button:hover {{ background: var(--bg-hover); }}
   .ctx-menu button.danger {{ color: #f85149; }}
   .ctx-menu button.danger:hover {{ background: rgba(248,81,73,0.1); }}
-  .quiz-detail {{
+  .json-overlay {{
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center; z-index: 1000;
+  }}
+  .json-overlay[hidden] {{ display: none; }}
+  .json-overlay-content {{
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1rem; margin-top: 1.5rem;
-    font-family: monospace; font-size: 0.8rem; white-space: pre-wrap;
-    max-height: 400px; overflow: auto;
+    border-radius: var(--radius); padding: 1.5rem; width: 90%; max-width: 800px;
+    max-height: 80vh; overflow: auto; font-family: monospace; font-size: 0.8rem;
+    white-space: pre-wrap; line-height: 1.4;
+  }}
+  .json-overlay-close {{
+    margin-top: 1rem; padding: 0.4rem 1rem; background: var(--bg-hover);
+    border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer;
   }}
 </style>
 </head>
@@ -823,14 +832,18 @@ def quiz_results_page():
 <main>
   <p class="quiz-progress">Alle gespeicherten Quiz-Versuche · gruppiert nach Quiz + Version · automatisch aktualisiert bei jedem Submit.</p>
   {cards_html}
-  <h2 style="margin-top:2rem">Details (JSON)</h2>
-  <pre class="quiz-detail" id="quiz-detail">{detail}</pre>
 </main>
 <footer><small>Report-Viewer · Quiz-Results</small></footer>
 
 <!-- Kontextmenü für Versions-Löschung -->
 <div class="ctx-menu" id="ctx-menu" hidden>
+  <button data-act="show-json">📋 JSON Details</button>
+  <button data-act="download-json">⬇️ JSON herunterladen</button>
   <button data-act="delete-version" class="danger">🗑️ Löschen</button>
+</div>
+<div class="json-overlay" id="json-overlay" hidden>
+  <div class="json-overlay-content" id="json-overlay-content"></div>
+  <button class="json-overlay-close" id="json-overlay-close">Schließen</button>
 </div>
 
 <script>
@@ -862,16 +875,46 @@ def quiz_results_page():
       Promise.all(ids.map(function (qid) {{
         return fetch("/api/quiz/results?quiz_id=" + encodeURIComponent(qid), {{ method: "DELETE" }});
       }})).then(function () {{ location.reload(); }});
+    }} else if (btn.dataset.act === "show-json" || btn.dataset.act === "download-json") {{
+      var card = ctx.closest("main").querySelector('.quiz-summary[data-quiz-base="' + CSS.escape(base) + '"]');
+      var ids = card ? Array.prototype.map.call(card.parentElement.querySelectorAll(".quiz-version"), function (li) {{ return li.dataset.quizId; }}) : [];
+      Promise.all(ids.map(function (qid) {{
+        return fetch("/api/quiz/results?quiz_id=" + encodeURIComponent(qid)).then(function (r) {{ return r.json(); }});
+      }})).then(function (results) {{
+        var merged = {{ quiz: base, versions: results }};
+        var jsonStr = JSON.stringify(merged, null, 2);
+        if (btn.dataset.act === "show-json") {{
+          overlayContent.textContent = jsonStr;
+          overlay.hidden = false;
+        }} else {{
+          var blob = new Blob([jsonStr], {{ type: "application/json" }});
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement("a");
+          a.href = url; a.download = base + "-results.json"; a.click();
+          URL.revokeObjectURL(url);
+        }}
+      }});
     }}
   }});
 
-  /* Klick auf Karte → scroll zu Details */
+  /* Klick auf Karte → Long-Press-Schutz */
   document.querySelectorAll(".quiz-group").forEach(function (card) {{
     card.addEventListener("click", function (e) {{
       if (e.target.closest(".ctx-menu")) return;
       if (longPressed) {{ longPressed = false; return; }}
-      detail.scrollIntoView({{behavior: "smooth", block: "start"}});
     }});
+  }});
+
+  /* JSON-Overlay */
+  var overlay = document.getElementById("json-overlay");
+  var overlayContent = document.getElementById("json-overlay-content");
+  var overlayClose = document.getElementById("json-overlay-close");
+  overlayClose.addEventListener("click", function () {{ overlay.hidden = true; }});
+  overlay.addEventListener("click", function (e) {{
+    if (e.target === overlay) overlay.hidden = true;
+  }});
+  document.addEventListener("keydown", function (e) {{
+    if (e.key === "Escape" && !overlay.hidden) overlay.hidden = true;
   }});
 
   /* Long-Press / Rechtsklick auf HAUPT-Kachel (summary) → Kontextmenü: ganzes Quiz löschen */
