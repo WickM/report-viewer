@@ -733,7 +733,7 @@ def quiz_results_page():
         cards.append(
             f'<div class="card quiz-group">'
             f'<details>'
-            f'<summary class="quiz-summary">'
+            f'<summary class="quiz-summary" data-quiz-base="{html_mod.escape(base)}">'
             f'<span class="card-title">📝 {html_mod.escape(base)}</span>'
             f'<span class="card-meta">{len(entries)} Version(en) · Gesamt {total_score}/{total_total} · {overall_pct}%</span>'
             f'<span class="quiz-score-bar"><span style="width:{overall_pct}%"></span></span>'
@@ -853,13 +853,15 @@ def quiz_results_page():
   ctx.addEventListener("click", function (e) {{
     var btn = e.target.closest("button[data-act]");
     if (!btn) return;
-    var quizId = ctx.dataset.quizId;
+    var base = ctx.dataset.quizId;
     hideCtx();
     if (btn.dataset.act === "delete-version") {{
-      if (!confirm('Quiz-Version "' + quizId + '" wirklich löschen?')) return;
-      fetch("/api/quiz/results?quiz_id=" + encodeURIComponent(quizId), {{ method: "DELETE" }})
-        .then(function (r) {{ return r.json(); }})
-        .then(function () {{ location.reload(); }});
+      if (!confirm('Quiz "' + base + '" mit ALLEN Versionen löschen?')) return;
+      var card = ctx.closest("main").querySelector('.quiz-summary[data-quiz-base="' + CSS.escape(base) + '"]');
+      var ids = card ? Array.prototype.map.call(card.parentElement.querySelectorAll(".quiz-version"), function (li) {{ return li.dataset.quizId; }}) : [];
+      Promise.all(ids.map(function (qid) {{
+        return fetch("/api/quiz/results?quiz_id=" + encodeURIComponent(qid), {{ method: "DELETE" }});
+      }})).then(function () {{ location.reload(); }});
     }}
   }});
 
@@ -872,25 +874,25 @@ def quiz_results_page():
     }});
   }});
 
-  /* Long-Press / Rechtsklick auf Versions-Item → Kontextmenü */
-  document.querySelectorAll(".quiz-version").forEach(function (item) {{
-    var quizId = item.dataset.quizId;
+  /* Long-Press / Rechtsklick auf HAUPT-Kachel (summary) → Kontextmenü: ganzes Quiz löschen */
+  document.querySelectorAll(".quiz-summary").forEach(function (summary) {{
+    var base = summary.dataset.quizBase;
 
-    item.addEventListener("contextmenu", function (e) {{
+    summary.addEventListener("contextmenu", function (e) {{
       e.preventDefault();
-      showCtx(e.clientX, e.clientY, quizId);
+      showCtx(e.clientX, e.clientY, base);
     }});
 
-    item.addEventListener("mousedown", function (e) {{
+    summary.addEventListener("mousedown", function (e) {{
       if (e.button !== 0) return;
       longPressed = false;
       pressTimer = setTimeout(function () {{
         longPressed = true;
-        showCtx(e.clientX, e.clientY, quizId);
+        showCtx(e.clientX, e.clientY, base);
       }}, 500);
     }});
-    item.addEventListener("mouseup", function () {{ clearTimeout(pressTimer); }});
-    item.addEventListener("mouseleave", function () {{ clearTimeout(pressTimer); }});
+    summary.addEventListener("mouseup", function () {{ clearTimeout(pressTimer); }});
+    summary.addEventListener("mouseleave", function () {{ clearTimeout(pressTimer); }});
   }});
 
   /* Schließen bei Klick außerhalb */
