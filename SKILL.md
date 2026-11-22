@@ -62,6 +62,7 @@ fi
 |---|---|
 | `md` | Reports, analyses, architecture docs, tables, Mermaid blocks, KaTeX (`$...$` / `$$...$$`) |
 | `html` | Interactive dashboards (Chart.js, Plotly, ECharts), complex web layouts |
+| `html` (Quiz/Flashcard) | Interactive quizzes & flashcards — take `references/quiz-template.html`, replace placeholders, publish as `html` |
 | `excalidraw` | A real `.excalidraw` board (JSON as `content` or `source_path`) |
 
 **Not supported (container):** Quarto/`.qmd`, Reveal.js, `<stem>_files/`. Desktop-only.
@@ -121,7 +122,29 @@ Give the URL to the user exactly as returned. **Never** construct URLs yourself.
 - If the backend cannot be started → refuse to run, tell the user to check `/tmp/rv.log`.
 - No Quarto, no `.qmd`, no Reveal.js — those are desktop-only.
 
-## 5. Deactivation / fallback
+### 4.5 Quiz / Flashcard (interactive HTML)
+
+Interactive quizzes are plain `html` reports — no extra server format needed.
+
+1. **Template:** `references/quiz-template.html` (in this skill's `references/`).
+2. **Fill placeholders:** `[TITEL]`, `[FRAGE]`, `[A]`–`[D]`, `[ERKLÄRUNG]`, `correct: <index>`, `why`.
+3. **Versionierung (wichtig):** Quiz-Updates bekommen eine neue `quiz_id` mit Suffix `-v1`, `-v2`, `-v3`...
+   - Erstes Quiz: `quiz_id = "quiz-<slug>-v1"` (z.B. `quiz-llm-governance-eu-ai-act-v1`)
+   - Update mit neuen Fragen: `quiz_id = "quiz-<slug>-v2"` (neue HTML-Datei, alte Ergebnisse bleiben erhalten)
+   - So bleiben alte und neue Quiz-Versuche **sauber getrennt auswertbar** (`/quiz-results` gruppiert nach Quiz + Version).
+4. **Publish:**
+   ```bash
+   curl -s -X POST http://localhost:8765/api/publish \
+     -H "Content-Type: application/json" \
+     -d '{"title":"<Titel>","format":"html","content":"<fully rendered HTML>"}'
+   ```
+5. **Ergebnisse speichern:** Die Quiz-Engine im Template postet automatisch beim Abschluss an `/api/quiz/result` mit `quiz_id`. Gespeichert in `RESULTS_DIR` (CIFS, persistent).
+6. **Ergebnisse anzeigen:** `/quiz-results` (Dashboard) zeigt alle Quiz-Versuche, gruppiert nach Quiz + Version.
+7. **Vor dem Publizieren:** `node --check` auf das extrahierte `<script>`-JS machen (Syntaxfehler → Quiz zeigt nichts).
+
+**Flashcards** = vereinfachte Quiz-Variante (Frage → Klick → Antwort), gleiche `quiz_id`-Versionierung.
+
+# 5. Deactivation / fallback
 
 If the backend is unreachable and cannot be started:
 - Do **not** execute the skill.
@@ -140,3 +163,5 @@ If the backend is unreachable and cannot be started:
 
 - Viewer project: `/media/HA_EXTERN/freigabe/projekte/report-viewer/`
 - Similar skill: `skills/session-closeout/SKILL.md`
+- Quiz template: `references/quiz-template.html`
+- Quiz results dashboard: `/quiz-results` (live, auto-aggregiert)
