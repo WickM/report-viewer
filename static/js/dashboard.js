@@ -83,6 +83,19 @@
         showContext(e.clientX, e.clientY, filename);
       });
 
+      /* Long-Press (Maus, 500ms) → Kontextmenü */
+      card.addEventListener("mousedown", function (e) {
+        if (e.button !== 0) return;
+        if (e.target.closest("#ctx-menu")) return;
+        longPressed = false;
+        pressTimer = setTimeout(function () {
+          longPressed = true;
+          showContext(e.clientX, e.clientY, filename);
+        }, 500);
+      });
+      card.addEventListener("mouseup", function () { clearTimeout(pressTimer); });
+      card.addEventListener("mouseleave", function () { clearTimeout(pressTimer); });
+
       /* Long-Press (Touch, 500ms) → Kontextmenü */
       card.addEventListener("touchstart", function (e) {
         if (e.touches.length !== 1) return;

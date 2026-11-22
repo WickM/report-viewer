@@ -201,7 +201,7 @@ form button:hover { background: var(--accent-hover); }
     font-size: 0.75rem;
     color: var(--text-muted);
     margin-top: 0.3rem;
-    opacity: 0;
+    opacity: 0.55;
     transition: opacity 0.15s;
 }
 .card:hover .card-hint { opacity: 1; }

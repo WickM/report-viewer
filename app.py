@@ -280,7 +280,7 @@ def _render_index(reports):
         f'<div class="card" data-filename="{r["filename"]}" tabindex="0">'
         f'<span class="card-title">{r["title"]}</span>'
         f'<span class="card-meta">{r["modified"]} · {r["size"] // 1024} KB</span>'
-        f'<span class="card-hint">Rechtsklick / Long-Press für Aktionen</span>'
+        f'<span class="card-hint">Langer Klick (500ms) oder Rechtsklick für Aktionen</span>'
         f'</div>'
         for r in reports
     ) or '<p class="empty">Noch keine Reports vorhanden.</p>'
