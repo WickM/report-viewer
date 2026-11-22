@@ -731,11 +731,15 @@ def quiz_results_page():
             for e in entries
         )
         cards.append(
-            f'<div class="card quiz-group" tabindex="0">'
+            f'<div class="card quiz-group">'
+            f'<details>'
+            f'<summary class="quiz-summary">'
             f'<span class="card-title">📝 {html_mod.escape(base)}</span>'
             f'<span class="card-meta">{len(entries)} Version(en) · Gesamt {total_score}/{total_total} · {overall_pct}%</span>'
             f'<span class="quiz-score-bar"><span style="width:{overall_pct}%"></span></span>'
+            f'</summary>'
             f'<ul class="quiz-versions">{versions_html}</ul>'
+            f'</details>'
             f'</div>'
         )
     cards_html = "".join(cards) or '<p class="empty">Noch keine Quiz-Ergebnisse vorhanden.</p>'
@@ -750,7 +754,20 @@ def quiz_results_page():
 <title>Quiz-Ergebnisse</title>
 <link rel="stylesheet" href="/static/css/style.css">
 <style>
-  .quiz-group {{ cursor: pointer; margin-bottom: 1rem; }}
+  .quiz-group {{ margin-bottom: 1rem; }}
+  .quiz-group details {{ width: 100%; }}
+  .quiz-summary {{
+    cursor: pointer; padding: 1.2rem; list-style: none;
+    display: flex; flex-direction: column; gap: 0.5rem;
+  }}
+  .quiz-summary::-webkit-details-marker {{ display: none; }}
+  .quiz-summary::before {{
+    content: '▶'; font-size: 0.7rem; color: var(--text-muted);
+    position: absolute; margin-top: 0.1rem;
+  }}
+  .quiz-group details[open] .quiz-summary::before {{ content: '▼'; }}
+  .quiz-group details[open] .quiz-versions {{ padding: 0 1.2rem 1rem; }}
+  .quiz-versions {{ margin: 0; }}
   .quiz-score-bar {{
     display: block; height: 8px; background: var(--bg-hover);
     border-radius: 4px; overflow: hidden; margin-top: 0.4rem;
@@ -813,7 +830,7 @@ def quiz_results_page():
 
 <!-- Kontextmenü für Versions-Löschung -->
 <div class="ctx-menu" id="ctx-menu" hidden>
-  <button data-act="delete-version" class="danger">🗑️ Version löschen</button>
+  <button data-act="delete-version" class="danger">🗑️ Löschen</button>
 </div>
 
 <script>
