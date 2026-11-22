@@ -833,7 +833,7 @@ def quiz_results_page():
   .ctx-menu {{
     position: fixed; z-index: 9999; min-width: 180px;
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    border-radius: var(--radius); box-shadow: 0 8px 32px rgba(0,0,0,0.55);
     padding: 5px; display: flex; flex-direction: column; gap: 1px;
   }}
   .ctx-menu[hidden] {{ display: none; }}
@@ -845,11 +845,11 @@ def quiz_results_page():
     transition: background 0.12s;
   }}
   .ctx-menu button:hover {{ background: var(--bg-hover); }}
-  .ctx-menu button.danger {{ color: #f85149; }}
-  .ctx-menu button.danger:hover {{ background: rgba(248,81,73,0.12); }}
+  .ctx-menu button.danger {{ color: var(--error); }}
+  .ctx-menu button.danger:hover {{ background: rgba(204,102,102,0.15); }}
 
   .json-overlay {{
-    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
     display: flex; align-items: center; justify-content: center; z-index: 1000;
     padding: 2rem;
   }}

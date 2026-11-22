@@ -1,17 +1,22 @@
 /* Report-Viewer — Stylesheet */
 
+/* Palette: OpenClaw Control UI (Dark) — extracted from OpenClaw theme export */
 :root {
-    --bg: #0d1117;
-    --bg-card: #161b22;
-    --bg-hover: #21262d;
-    --border: #30363d;
-    --text: #e6edf3;
-    --text-muted: #8b949e;
-    --accent: #2f81f7;
-    --accent-hover: #58a6ff;
-    --radius: 8px;
+    --bg: #1e1e28;          /* OpenClaw --body-bg */
+    --bg-card: #282832;     /* OpenClaw --container-bg */
+    --bg-hover: #343541;    /* OpenClaw --userMessageBg */
+    --border: #5f87ff;      /* OpenClaw --border (blue) */
+    --text: #e0e0e0;        /* OpenClaw --text */
+    --text-muted: #808080;  /* OpenClaw --muted */
+    --accent: #8abeb7;      /* OpenClaw --accent (teal/sage) */
+    --accent-hover: #00d7ff;/* OpenClaw --cyan */
+    --radius: 6px;
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+    /* OpenClaw status colors */
+    --success: #b5bd68;
+    --error: #cc6666;
+    --warning: #ffff00;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -232,8 +237,8 @@ form button:hover { background: var(--accent-hover); }
     white-space: nowrap;
 }
 .ctx-menu button:hover { background: var(--bg-hover); }
-.ctx-menu button.danger { color: #f85149; }
-.ctx-menu button.danger:hover { background: rgba(248,81,73,0.1); }
+.ctx-menu button.danger { color: var(--error); }
+.ctx-menu button.danger:hover { background: rgba(204,102,102,0.15); }
 
 .comments-panel {
     background: var(--bg-card);
@@ -281,7 +286,7 @@ form button:hover { background: var(--accent-hover); }
     border-radius: 4px;
     align-self: start;
 }
-.comment-delete:hover { color: #f85149; }
+.comment-delete:hover { color: var(--error); }
 .comments-form { display: flex; flex-direction: column; gap: 6px; }
 .comments-form input, .comments-form textarea {
     background: var(--bg);
@@ -597,7 +602,7 @@ form button:hover { background: var(--accent-hover); }
     padding: 2px 6px;
     border-radius: 4px;
 }
-.clp-delete:hover { color: #f85149; }
+.clp-delete:hover { color: var(--error); }
 
 /* Mobile: panel full-width */
 @media (max-width: 640px) {
