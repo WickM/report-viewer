@@ -21,12 +21,10 @@ from markdown_it import MarkdownIt
 
 BASE_DIR = Path(__file__).parent
 REPORTS_DIR = BASE_DIR / "reports"
-UPLOADS_DIR = BASE_DIR / "uploads"
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
 
 REPORTS_DIR.mkdir(exist_ok=True)
-UPLOADS_DIR.mkdir(exist_ok=True)
 
 HOST = os.environ.get("REPORT_VIEWER_HOST", "0.0.0.0")
 PORT = int(os.environ.get("REPORT_VIEWER_PORT", "8765"))
@@ -300,7 +298,6 @@ def _render_index(reports):
   <h1>📄 Report-Viewer</h1>
   <nav>
     <a href="/">Übersicht</a>
-    <a href="/upload">Upload</a>
   </nav>
 </header>
 <main>
@@ -348,36 +345,6 @@ def view_report(filename):
     return Response(html, mimetype="text/html")
 
 
-@app.route("/upload", methods=["GET", "POST"])
-def upload():
-    """Upload page — POST markdown or HTML."""
-    if request.method == "GET":
-        html = """<!DOCTYPE html>
-<html lang="de">
-<head>
-<meta charset="utf-8">
-<title>Upload — Report-Viewer</title>
-<link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-<header><h1>📤 Upload</h1><a href="/">← Zurück</a></header>
-<main>
-<form method="POST" action="/api/publish">
-  <label>Titel:<br><input type="text" name="title" placeholder="Mein Bericht" required></label><br><br>
-  <label>Format:<br>
-    <select name="format">
-      <option value="md">Markdown (md)</option>
-      <option value="html">HTML (html)</option>
-    </select>
-  </label><br><br>
-  <label>Inhalt:<br><textarea name="content" rows="15" style="width:100%" placeholder="# Überschrift&#10;&#10;Text mit **Markdown** ..."></textarea></label><br><br>
-  <button type="submit">Veröffentlichen</button>
-</form>
-</main>
-</body>
-</html>"""
-        return html
-    return redirect(url_for("upload"))
 
 
 # ---------------------------------------------------------------------------
