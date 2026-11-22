@@ -754,75 +754,125 @@ def quiz_results_page():
 <title>Quiz-Ergebnisse</title>
 <link rel="stylesheet" href="/static/css/style.css">
 <style>
-  .quiz-group {{ margin-bottom: 1rem; }}
+  /* ── Quiz-Ergebnisse — OpenClaw Design ─────────────────────────── */
+  main {{ max-width: 960px; }}
+
+  .quiz-progress {{
+    color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;
+    padding: 0.75rem 1rem; background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: var(--radius);
+  }}
+
+  .quiz-group {{
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }}
+  .quiz-group:hover {{ border-color: var(--accent); }}
+
   .quiz-group details {{ width: 100%; }}
+
   .quiz-summary {{
-    cursor: pointer; padding: 1.2rem; list-style: none;
+    cursor: pointer; padding: 1rem 1.2rem; list-style: none;
     -webkit-user-select: none; user-select: none;
     -webkit-touch-callout: none; touch-action: manipulation;
-    display: flex; flex-direction: column; gap: 0.5rem;
+    display: flex; flex-direction: column; gap: 0.4rem;
+    transition: background 0.15s;
   }}
+  .quiz-summary:hover {{ background: var(--bg-hover); }}
   .quiz-summary::-webkit-details-marker {{ display: none; }}
+
   .quiz-summary::before {{
-    content: '▶'; font-size: 0.7rem; color: var(--text-muted);
-    position: absolute; margin-top: 0.1rem;
+    content: '▶'; font-size: 0.65rem; color: var(--text-muted);
+    position: absolute; margin-top: 0.15rem;
+    transition: transform 0.15s;
   }}
   .quiz-group details[open] .quiz-summary::before {{ content: '▼'; }}
-  .quiz-group details[open] .quiz-versions {{ padding: 0 1.2rem 1rem; }}
-  .quiz-versions {{ margin: 0; }}
+
+  .card-title {{
+    font-weight: 600; font-size: 1rem; color: var(--text);
+    display: flex; align-items: center; gap: 0.5rem;
+  }}
+  .card-meta {{ color: var(--text-muted); font-size: 0.85rem; }}
+
   .quiz-score-bar {{
-    display: block; height: 8px; background: var(--bg-hover);
-    border-radius: 4px; overflow: hidden; margin-top: 0.4rem;
+    display: block; height: 6px; background: var(--bg-hover);
+    border-radius: 3px; overflow: hidden; margin-top: 0.3rem;
   }}
   .quiz-score-bar > span {{
     display: block; height: 100%; background: var(--accent);
-    border-radius: 4px; transition: width 0.3s;
+    border-radius: 3px; transition: width 0.3s;
   }}
+
   .quiz-versions {{
-    list-style: none; padding: 0; margin: 0.6rem 0 0 0;
-    font-size: 0.85rem; color: var(--text-muted);
+    list-style: none; padding: 0; margin: 0;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
   }}
   .quiz-versions li {{
-    display: flex; gap: 0.8rem; padding: 0.3rem 0;
+    display: flex; gap: 0.8rem; padding: 0.6rem 1.2rem;
     border-bottom: 1px solid var(--border);
-    cursor: pointer;
+    cursor: pointer; align-items: center;
+    transition: background 0.12s;
   }}
   .quiz-versions li:last-child {{ border-bottom: none; }}
   .quiz-versions li:hover {{ background: var(--bg-hover); }}
-  .ver-label {{ font-weight: 600; color: var(--text); min-width: 8rem; }}
-  .ver-score {{ color: var(--accent); min-width: 6rem; }}
-  .ver-ts {{ flex: 1; }}
-  .ver-hint {{ color: var(--text-muted); font-size: 0.75rem; opacity: 0; }}
-  .quiz-version:hover .ver-hint {{ opacity: 0.6; }}
+
+  .ver-label {{ font-weight: 500; color: var(--text); font-size: 0.85rem; min-width: 7rem; }}
+  .ver-score {{ color: var(--accent); font-size: 0.85rem; min-width: 5.5rem; }}
+  .ver-ts {{ flex: 1; color: var(--text-muted); font-size: 0.8rem; }}
+  .ver-hint {{
+    color: var(--text-muted); font-size: 0.72rem; opacity: 0;
+    transition: opacity 0.15s;
+  }}
+  .quiz-versions li:hover .ver-hint {{ opacity: 0.7; }}
+
   .ctx-menu {{
-    position: fixed; z-index: 9999; min-width: 160px;
+    position: fixed; z-index: 9999; min-width: 180px;
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-    padding: 4px; display: flex; flex-direction: column; gap: 2px;
+    border-radius: var(--radius); box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    padding: 5px; display: flex; flex-direction: column; gap: 1px;
   }}
   .ctx-menu[hidden] {{ display: none; }}
   .ctx-menu button {{
     background: none; border: none; color: var(--text);
-    text-align: left; padding: 8px 12px; font-size: 0.92rem;
+    text-align: left; padding: 9px 14px; font-size: 0.9rem;
     border-radius: 6px; cursor: pointer; white-space: nowrap;
+    display: flex; align-items: center; gap: 0.5rem;
+    transition: background 0.12s;
   }}
   .ctx-menu button:hover {{ background: var(--bg-hover); }}
   .ctx-menu button.danger {{ color: #f85149; }}
-  .ctx-menu button.danger:hover {{ background: rgba(248,81,73,0.1); }}
+  .ctx-menu button.danger:hover {{ background: rgba(248,81,73,0.12); }}
+
   .json-overlay {{
-    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
     display: flex; align-items: center; justify-content: center; z-index: 1000;
+    padding: 2rem;
   }}
   .json-overlay[hidden] {{ display: none; }}
   .json-overlay-content {{
     background: var(--bg-card); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 1.5rem; width: 90%; max-width: 800px;
-    max-height: 80vh; overflow: auto; font-family: monospace; font-size: 0.8rem;
-    white-space: pre-wrap; line-height: 1.4;
+    max-height: 80vh; overflow: auto; font-family: var(--font-mono); font-size: 0.8rem;
+    white-space: pre-wrap; line-height: 1.5; color: var(--text);
   }}
   .json-overlay-close {{
-    margin-top: 1rem; padding: 0.4rem 1rem; background: var(--bg-hover);
-    border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer;
+    margin-top: 1rem; padding: 0.5rem 1.2rem; background: var(--accent);
+    color: #fff; border: none; border-radius: var(--radius);
+    cursor: pointer; font-size: 0.9rem; font-family: var(--font-sans);
+    transition: background 0.15s;
+  }}
+  .json-overlay-close:hover {{ background: var(--accent-hover); }}
+
+  @media (max-width: 640px) {{
+    .quiz-summary {{ padding: 0.9rem 1rem; }}
+    .quiz-versions li {{ padding: 0.5rem 1rem; flex-wrap: wrap; }}
+    .ver-hint {{ display: none; }}
+    .json-overlay {{ padding: 1rem; }}
   }}
 </style>
 </head>
