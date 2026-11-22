@@ -9,6 +9,7 @@ Vorlagen für wiederkehrende Berichte. Jede Vorlage ist eine Markdown-Datei mit 
 | `weekly-status.md` | Wöchentlicher Statusbericht (Mo-Fr, Ampel, Top-3) | `md` |
 | `research-summary.md` | Recherche-Zusammenfassung (These, Evidenz, Contra, Fazit) | `md` |
 | `architecture-decision.md` | Architektur-Entscheidung (ADR-Format: Kontext, Entscheidung, Konsequenzen) | `md` |
+| `quiz-template.html` | Interaktives Quiz mit Multiple-Choice + automatischer Ergebnis-Speicherung | `html` |
 
 ## Eigene Vorlage
 
