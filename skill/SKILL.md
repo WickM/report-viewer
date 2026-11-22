@@ -3,6 +3,21 @@ name: report-viewer
 description: Publish and iterate on browser-viewable reports (Markdown with Mermaid/KaTeX, HTML dashboards, Excalidraw boards) via the local report-viewer REST API. Use whenever a structured visual report, dashboard or diagram should be created or revised and a browser comment-loop is wanted. Not for plain chat answers, not for desktop-only features (Quarto/qmd, Reveal.js).
 user-invocable: true
 disable-model-invocation: false
+version: 1.0.0
+author: WickM
+license: Apache-2.0
+homepage: https://github.com/WickM/report-viewer
+tags:
+  - reporting
+  - dashboard
+  - excalidraw
+  - markdown
+  - mermaid
+  - katex
+  - charts
+  - comment-loop
+  - flask
+  - openclaw-skill
 ---
 
 # Report-Viewer (Skill)
