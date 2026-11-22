@@ -37,6 +37,14 @@ BASE_URL = os.environ.get("REPORT_VIEWER_BASE_URL", f"http://localhost:{PORT}")
 COMMENTS_DIR = BASE_DIR / ".comments"
 COMMENTS_DIR.mkdir(exist_ok=True)
 
+# Quiz-Ergebnisse: persistent, außerhalb des Entwicklungsordners.
+# Default ~/.local/share/report-viewer/results, überschreibbar via REPORT_VIEWER_RESULTS_DIR.
+RESULTS_DIR = Path(os.environ.get(
+    "REPORT_VIEWER_RESULTS_DIR",
+    str(Path.home() / ".local" / "share" / "report-viewer" / "results"),
+))
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
 def _safe_name(filename: str) -> str:
     """Map filename -> safe JSON path inside .comments/."""
     return filename.replace("/", "_").replace("..", "_") + ".json"
@@ -150,6 +158,33 @@ COMMENT_WIDGET_HTML = '''
   <div id="thread-comments" class="thread-comments"></div>
 </div>
 '''
+
+# ---------------------------------------------------------------------------
+# Quiz results (persistent — stored outside the dev folder)
+# ---------------------------------------------------------------------------
+
+def _result_path(filename: str) -> Path:
+    safe = re.sub(r'[^a-zA-Z0-9._-]+', '_', os.path.basename(filename))[:120] or "unknown"
+    return RESULTS_DIR / f"{safe}.json"
+
+def _load_results(filename: str) -> list:
+    fp = _result_path(filename)
+    if not fp.exists():
+        return []
+    try:
+        return json.loads(fp.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+def _save_result(filename: str, entry: dict) -> dict:
+    entries = _load_results(filename)
+    entry.setdefault("ts", time.strftime("%Y-%m-%dT%H:%M:%S"))
+    entry.setdefault("id", uuid.uuid4().hex[:8])
+    entries.append(entry)
+    _result_path(filename).write_text(
+        json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
+    return entry
+
 
 # ---------------------------------------------------------------------------
 # Routes — Comments API
@@ -566,6 +601,45 @@ def _wrap_excalidraw(title: str, raw_json: str) -> str:
 </script>
 </body>
 </html>"""
+
+
+# ---------------------------------------------------------------------------
+# Routes — Quiz results
+# ---------------------------------------------------------------------------
+
+@app.route("/api/quiz/result", methods=["POST"])
+def api_quiz_result():
+    """Speichere ein Quiz-Ergebnis persistent (außerhalb des Entwicklungsordners)."""
+    data = request.get_json(force=True) or {}
+    filename = (data.get("filename") or "").strip()
+    if not filename:
+        return jsonify({"error": "filename required"}), 400
+    entry = {
+        "score": data.get("score"),
+        "total": data.get("total"),
+        "answers": data.get("answers") or [],
+    }
+    saved = _save_result(filename, entry)
+    return jsonify(saved), 201
+
+
+@app.route("/api/quiz/results", methods=["GET"])
+def api_quiz_results():
+    """Alle gespeicherten Quiz-Ergebnisse (optional nach filename filtern)."""
+    filename = request.args.get("filename")
+    if filename:
+        return jsonify(_load_results(filename))
+    out = []
+    for fp in RESULTS_DIR.glob("*.json"):
+        try:
+            data = json.loads(fp.read_text(encoding="utf-8"))
+            for e in data:
+                e.setdefault("_file", fp.name)
+                out.append(e)
+        except Exception:
+            pass
+    out.sort(key=lambda c: c.get("ts", ""), reverse=True)
+    return jsonify(out[:200])
 
 
 # ---------------------------------------------------------------------------
