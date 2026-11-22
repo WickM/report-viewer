@@ -881,7 +881,7 @@ def quiz_results_page():
       Promise.all(ids.map(function (qid) {{
         return fetch("/api/quiz/results?quiz_id=" + encodeURIComponent(qid)).then(function (r) {{ return r.json(); }});
       }})).then(function (results) {{
-        var merged = {{ quiz: base, versions: results }};
+        var merged = results.length === 1 ? results[0] : {{ quizzes: results }};
         var jsonStr = JSON.stringify(merged, null, 2);
         if (btn.dataset.act === "show-json") {{
           overlayContent.textContent = jsonStr;
