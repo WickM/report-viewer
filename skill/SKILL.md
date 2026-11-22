@@ -1,0 +1,128 @@
+---
+name: report-viewer
+description: Publish and iterate on browser-viewable reports (Markdown with Mermaid/KaTeX, HTML dashboards, Excalidraw boards) via the local report-viewer REST API. Use whenever a structured visual report, dashboard or diagram should be created or revised and a browser comment-loop is wanted. Not for plain chat answers, not for desktop-only features (Quarto/qmd, Reveal.js).
+user-invocable: true
+disable-model-invocation: false
+---
+
+# Report-Viewer (Skill)
+
+> **Container-Variant**: Direct REST API calls, no MCP server required.
+> The viewer runs at `http://localhost:8765` from the OpenClaw container.
+> The skill checks the backend on every invocation and starts it automatically if needed.
+
+## Prerequisites
+
+- The skill checks the backend health on every invocation.
+- If the backend is **not running**, the skill starts it automatically via `start.sh`.
+- If the backend is running, it is reused as-is.
+- No external URLs are ever invented — always use the link returned by `POST /api/publish`.
+
+## 0. Pre-flight: ensure backend is up
+
+```bash
+# Check health
+HEALTH=$(curl -s -m3 http://localhost:8765/api/health 2>/dev/null || echo "")
+if echo "$HEALTH" | grep -q '"status": "ok"'; then
+  echo "Backend already running"
+else
+  echo "Backend not running — starting it..."
+  cd /media/HA_EXTERN/freigabe/projekte/report-viewer
+  nohup ./start.sh >/tmp/rv.log 2>&1 &
+  sleep 2
+  # Verify
+  HEALTH=$(curl -s -m3 http://localhost:8765/api/health 2>/dev/null || echo "")
+  if echo "$HEALTH" | grep -q '"status": "ok"'; then
+    echo "Backend started successfully"
+  else
+    echo "ERROR: Backend failed to start. Check /tmp/rv.log"
+    exit 1
+  fi
+fi
+```
+
+## 1. Format selection
+
+| Format | Use for |
+|---|---|
+| `md` | Reports, analyses, architecture docs, tables, Mermaid blocks, KaTeX (`$...$` / `$$...$$`) |
+| `html` | Interactive dashboards (Chart.js, Plotly, ECharts), complex web layouts |
+| `excalidraw` | A real `.excalidraw` board (JSON as `content` or `source_path`) |
+
+**Not supported (container):** Quarto/`.qmd`, Reveal.js, `<stem>_files/`. Desktop-only.
+
+## 2. Publish a report
+
+**Inline content:**
+```bash
+curl -s -X POST http://localhost:8765/api/publish \
+  -H "Content-Type: application/json" \
+  -d '{"title":"<short title>","format":"md|html|excalidraw","content":"<raw content>"}'
+```
+
+**From a file on disk:**
+```bash
+curl -s -X POST http://localhost:8765/api/publish \
+  -H "Content-Type: application/json" \
+  -d '{"title":"<short title>","format":"md|html|excalidraw","source_path":"/path/to/file"}'
+```
+
+**Response** contains `filename`, `url`, `created` (true on first publish, false on overwrite).
+Give the URL to the user exactly as returned. **Never** construct URLs yourself.
+
+## 3. Feedback loop (browser comments → source)
+
+1. **List comments for a report:**
+   ```bash
+   curl -s "http://localhost:8765/api/comments?filename=<filename>"
+   ```
+   Returns an array of comments: `id`, `author`, `text`, `quote`, `created`, optionally `resolved`.
+
+2. **Update the source:**
+   - With `source_path`: patch the original file (e.g. the brain vault `.md`) so the working copy stays in sync.
+   - Without `source_path`: rewrite the `content` string.
+
+3. **In-place overwrite** (same URL stays):
+   ```bash
+   curl -s -X POST http://localhost:8765/api/publish \
+     -H "Content-Type: application/json" \
+     -d '{"title":"<title>","format":"md|html|excalidraw","source_path":"<same path>","filename":"<existing filename>"}'
+   ```
+   or with `content` instead of `source_path`.
+
+4. **Mark comments resolved** (only AFTER publish succeeded):
+   ```bash
+   curl -s -X POST http://localhost:8765/api/comments/<comment_id>/resolve
+   ```
+
+5. Tell the user: what was patched, that they should press F5.
+
+## 4. Hard rules (never break)
+
+- Iterations **always** overwrite the same `filename` — no new timestamped file (unless the user explicitly asks for a new version).
+- Resolve comments **only after** `publish_report` succeeded.
+- Never invent URLs — only the link returned by the publish call.
+- When `source_path` was used, keep that file patched (working copy ↔ viewer sync).
+- If the backend cannot be started → refuse to run, tell the user to check `/tmp/rv.log`.
+- No Quarto, no `.qmd`, no Reveal.js — those are desktop-only.
+
+## 5. Deactivation / fallback
+
+If the backend is unreachable and cannot be started:
+- Do **not** execute the skill.
+- Tell the user: "Report-Viewer backend not reachable at localhost:8765 — skill deactivation. Check `/tmp/rv.log` or run `cd /media/HA_EXTERN/freigabe/projekte/report-viewer && ./start.sh` manually."
+- Never produce fake URLs.
+
+## 6. Smoke tests (definition of done)
+
+- [ ] Pre-flight: backend already running → "already running" message.
+- [ ] Pre-flight: backend not running → starts via `start.sh` → "started successfully".
+- [ ] `curl -X POST .../api/publish` with a small `md` payload → response contains a `url` → paste in chat, confirm.
+- [ ] Add a comment in the browser → `GET /api/comments?filename=...` shows it → patch source → `POST /api/publish` (same `filename`) → `POST /api/comments/<id>/resolve` → F5 → comment gone.
+- [ ] Graceful degradation: `start.sh` fails → skill refuses and tells user.
+
+## 7. References
+
+- Infrastructure plan: `deep-plans/2026-11-21-report-viewer-skill.md`
+- Viewer project: `/media/HA_EXTERN/freigabe/projekte/report-viewer/`
+- Similar skill: `skills/session-closeout/SKILL.md`

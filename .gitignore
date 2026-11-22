@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.comments/
+logs/
+backups/
+reports/
+uploads/
+*.log
+.env
