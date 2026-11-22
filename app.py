@@ -551,13 +551,13 @@ def _wrap_excalidraw(title: str, raw_json: str) -> str:
 <link rel="stylesheet" href="/static/css/style.css">
 <style>
   html, body {{ margin:0; padding:0; }}
-  body.report-body {{ height:100vh; display:flex; flex-direction:column; background:#0d1117; color:#e6edf3; }}
+  body.report-body {{ height:100vh; display:flex; flex-direction:column; background:#1e1e28; color:#e0e0e0; }}
   #excalidraw-app {{ flex:1; min-height:0; position:relative; }}
-  body.report-body header {{ flex:0 0 auto; display:flex; align-items:center; gap:1.5rem; padding:1rem 2rem; background:#161b22; border-bottom:1px solid #30363d; }}
+  body.report-body header {{ flex:0 0 auto; display:flex; align-items:center; gap:1.5rem; padding:1rem 2rem; background:#282832; border-bottom:1px solid #505050; }}
   body.report-body header h1 {{ font-size:1.2rem; margin:0; }}
-  body.report-body header a {{ color:#8b949e; text-decoration:none; }}
-  body.report-body header a:hover {{ color:#58a6ff; }}
-  #loading {{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:1.1rem; color:#8b949e; }}
+  body.report-body header a {{ color:#808080; text-decoration:none; }}
+  body.report-body header a:hover {{ color:#a8d4cc; }}
+  #loading {{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:1.1rem; color:#808080; }}
 </style>
 {bundle_tag}
 </head>
@@ -576,7 +576,7 @@ def _wrap_excalidraw(title: str, raw_json: str) -> str:
       console.error("Excalidraw init failed:", msg);
       if (loading) {{
         loading.textContent = "❌ Excalidraw konnte nicht geladen werden: " + msg;
-        loading.style.color = "#f85149";
+        loading.style.color = "#cc6666";
       }}
     }}
 
