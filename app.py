@@ -758,6 +758,8 @@ def quiz_results_page():
   .quiz-group details {{ width: 100%; }}
   .quiz-summary {{
     cursor: pointer; padding: 1.2rem; list-style: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none; touch-action: manipulation;
     display: flex; flex-direction: column; gap: 0.5rem;
   }}
   .quiz-summary::-webkit-details-marker {{ display: none; }}
@@ -855,15 +857,20 @@ def quiz_results_page():
 
   function showCtx(x, y, quizId) {{
     ctx.dataset.quizId = quizId;
+    ctx.dataset.openedViaTouch = "1";
     ctx.hidden = false;
     var w = ctx.offsetWidth, h = ctx.offsetHeight;
     ctx.style.left = Math.min(x, window.innerWidth - w - 8) + "px";
     ctx.style.top = Math.min(y, window.innerHeight - h - 8) + "px";
   }}
-  function hideCtx() {{ if (ctx) ctx.hidden = true; }}
+  var ctxSuppressUntil = 0;
+  function hideCtx() {{ if (ctx) {{ ctx.hidden = true; ctxSuppressUntil = Date.now() + 400; }} }}
 
-  ctx.addEventListener("click", function (e) {{
+  ctx.addEventListener("pointerdown", function (e) {{
     var btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
     if (!btn) return;
     var base = ctx.dataset.quizId;
     hideCtx();
@@ -930,7 +937,8 @@ def quiz_results_page():
     if (e.key === "Escape" && !overlay.hidden) overlay.hidden = true;
   }});
 
-  /* Long-Press / Rechtsklick auf HAUPT-Kachel (summary) → Kontextmenü: ganzes Quiz löschen */
+  /* Long-Press (Maus + Touch) / Rechtsklick auf HAUPT-Kachel → Kontextmenü */
+  var startX = 0, startY = 0;
   document.querySelectorAll(".quiz-summary").forEach(function (summary) {{
     var base = summary.dataset.quizBase;
 
@@ -949,11 +957,38 @@ def quiz_results_page():
     }});
     summary.addEventListener("mouseup", function () {{ clearTimeout(pressTimer); }});
     summary.addEventListener("mouseleave", function () {{ clearTimeout(pressTimer); }});
+
+    /* Touch Long-Press (Handy) */
+    summary.addEventListener("touchstart", function (e) {{
+      if (e.touches.length !== 1) return;
+      var t = e.touches[0];
+      startX = t.clientX; startY = t.clientY;
+      longPressed = false;
+      pressTimer = setTimeout(function () {{
+        longPressed = true;
+        showCtx(startX, startY, base);
+      }}, 500);
+    }}, {{ passive: true }});
+
+    summary.addEventListener("touchend", function () {{
+      clearTimeout(pressTimer);
+      if (longPressed) {{ e.preventDefault(); }}
+    }});
+    summary.addEventListener("touchmove", function (e) {{
+      if (e.touches.length !== 1) return;
+      var t = e.touches[0];
+      if (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10) {{
+        clearTimeout(pressTimer);
+      }}
+    }}, {{ passive: true }});
   }});
 
   /* Schließen bei Klick außerhalb */
   document.addEventListener("click", function (e) {{
-    if (ctx && !ctx.hidden && !ctx.contains(e.target)) hideCtx();
+    if (!ctx || ctx.hidden) return;
+    if (ctx.contains(e.target)) return;
+    if (Date.now() < ctxSuppressUntil) return;
+    hideCtx();
   }});
   document.addEventListener("keydown", function (e) {{
     if (e.key === "Escape") hideCtx();
