@@ -165,7 +165,9 @@ COMMENT_WIDGET_HTML = '''
 
 def _result_path(filename: str) -> Path:
     safe = re.sub(r'[^a-zA-Z0-9._-]+', '_', os.path.basename(filename))[:120] or "unknown"
-    return RESULTS_DIR / f"{safe}.json"
+    if not safe.endswith(".json"):
+        safe = safe + ".json"
+    return RESULTS_DIR / safe
 
 def _load_results(filename: str) -> list:
     fp = _result_path(filename)
@@ -176,12 +178,25 @@ def _load_results(filename: str) -> list:
     except Exception:
         return []
 
-def _save_result(filename: str, entry: dict) -> dict:
-    entries = _load_results(filename)
+def _quiz_key(filename: str, quiz_id: str = "") -> str:
+    """Speicher-Key: quiz_id (versioniert) oder fallback filename.
+    WICHTIG: quiz_id wird NICHT nochmal mit 'quiz-' präfixiert — der Client
+    übergibt die volle ID (z.B. 'quiz-llm-governance-eu-ai-act-v2')."""
+    qid = (quiz_id or "").strip()
+    if qid:
+        safe = re.sub(r'[^a-zA-Z0-9._-]+', '_', qid)[:120] or "unknown"
+        return f"{safe}.json"
+    return os.path.basename(filename)
+
+def _save_result(filename: str, entry: dict, quiz_id: str = "") -> dict:
+    key = _quiz_key(filename, quiz_id)
+    entries = _load_results(key)
     entry.setdefault("ts", time.strftime("%Y-%m-%dT%H:%M:%S"))
     entry.setdefault("id", uuid.uuid4().hex[:8])
+    if quiz_id:
+        entry.setdefault("quiz_id", quiz_id)
     entries.append(entry)
-    _result_path(filename).write_text(
+    _result_path(key).write_text(
         json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
     return entry
 
@@ -615,12 +630,13 @@ def api_quiz_result():
     filename = (data.get("filename") or "").strip()
     if not filename:
         return jsonify({"error": "filename required"}), 400
+    quiz_id = (data.get("quiz_id") or "").strip()
     entry = {
         "score": data.get("score"),
         "total": data.get("total"),
         "answers": data.get("answers") or [],
     }
-    saved = _save_result(filename, entry)
+    saved = _save_result(filename, entry, quiz_id)
     return jsonify(saved), 201
 
 
@@ -643,49 +659,86 @@ def api_quiz_results():
     return jsonify(out[:200])
 
 
+@app.route("/api/quiz/results", methods=["DELETE"])
+def api_quiz_results_delete():
+    """Löscht alle gespeicherten Quiz-Ergebnisse (optional nach quiz_id/filename filtern)."""
+    quiz_id = request.args.get("quiz_id")
+    filename = request.args.get("filename")
+    if quiz_id:
+        fp = _result_path(f"{quiz_id}.json")
+        if fp.exists():
+            fp.unlink()
+            return jsonify({"deleted": quiz_id})
+        return jsonify({"error": "not found"}), 404
+    if filename:
+        fp = _result_path(os.path.basename(filename))
+        if fp.exists():
+            fp.unlink()
+            return jsonify({"deleted": filename})
+        return jsonify({"error": "not found"}), 404
+    return jsonify({"error": "quiz_id or filename required"}), 400
+
+
 # ---------------------------------------------------------------------------
 # Routes — Quiz results dashboard (auto-aggregiert, keine separate Datei)
 # ---------------------------------------------------------------------------
 
 @app.route("/quiz-results")
 def quiz_results_page():
-    """Aggregiert alle Quiz-Ergebnisse live aus /api/quiz/results — wird bei jedem Quiz-Submit automatisch aktuell."""
-    rows = []
+    """Aggregiert alle Quiz-Ergebnisse live, gruppiert nach Quiz (Base) + Version (quiz_id)."""
+    # Gruppieren: base -> {version -> [entries]}
+    groups = {}  # base_id -> list of (version, entry)
     for fp in sorted(RESULTS_DIR.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
         try:
             data = json.loads(fp.read_text(encoding="utf-8"))
         except Exception:
             continue
-        if not data:
-            continue
-        filename = fp.name[:-5]  # .json strippen
         for e in data:
+            qid = (e.get("quiz_id") or "").strip() or fp.name[:-5]
+            # base = quiz_id ohne -vX Suffix
+            base = re.sub(r'-v\d+$', '', qid)
+            version = qid
             score = e.get("score") or 0
             total = e.get("total") or 1
             pct = round(100 * score / total)
-            answers = e.get("answers") or []
-            rows.append({
-                "filename": filename,
+            groups.setdefault(base, []).append({
+                "version": version,
                 "score": score,
                 "total": total,
                 "pct": pct,
                 "ts": e.get("ts", ""),
                 "id": e.get("id", ""),
-                "answers": answers,
+                "answers": e.get("answers") or [],
             })
-    rows.sort(key=lambda r: r["ts"], reverse=True)
 
-    cards = "".join(
-        f'<div class="card quiz-result-card" data-filename="{r["filename"]}" tabindex="0">'
-        f'<span class="card-title">{r["filename"]}</span>'
-        f'<span class="card-meta">{r["ts"]} · {r["score"]}/{r["total"]} · {r["pct"]}%</span>'
-        f'<span class="quiz-score-bar"><span style="width:{r["pct"]}%"></span></span>'
-        f'</div>'
-        for r in rows
-    ) or '<p class="empty">Noch keine Quiz-Ergebnisse vorhanden.</p>'
+    # Sort each group by ts desc
+    for base in groups:
+        groups[base].sort(key=lambda x: x["ts"], reverse=True)
 
-    # Detail-Ansicht (JSON-Liste) für "langer Klick / Download"
-    detail = json.dumps(rows, ensure_ascii=False, indent=2)
+    # Build cards: one per quiz (base), with versions inside
+    import html as html_mod
+    cards = []
+    for base, entries in sorted(groups.items(), key=lambda kv: kv[1][0]["ts"] if kv[1] else "", reverse=True):
+        total_score = sum(e["score"] for e in entries)
+        total_total = sum(e["total"] for e in entries)
+        overall_pct = round(100 * total_score / total_total) if total_total else 0
+        versions_html = "".join(
+            f'<li><span class="ver-label">{html_mod.escape(e["version"])}</span>'
+            f'<span class="ver-score">{e["score"]}/{e["total"]} · {e["pct"]}%</span>'
+            f'<span class="ver-ts">{html_mod.escape(e["ts"])}</span></li>'
+            for e in entries
+        )
+        cards.append(
+            f'<div class="card quiz-group" tabindex="0">'
+            f'<span class="card-title">📝 {html_mod.escape(base)}</span>'
+            f'<span class="card-meta">{len(entries)} Version(en) · Gesamt {total_score}/{total_total} · {overall_pct}%</span>'
+            f'<span class="quiz-score-bar"><span style="width:{overall_pct}%"></span></span>'
+            f'<ul class="quiz-versions">{versions_html}</ul>'
+            f'</div>'
+        )
+    cards_html = "".join(cards) or '<p class="empty">Noch keine Quiz-Ergebnisse vorhanden.</p>'
+
+    detail = json.dumps(groups, ensure_ascii=False, indent=2)
 
     html = f"""<!DOCTYPE html>
 <html lang="de">
@@ -695,7 +748,7 @@ def quiz_results_page():
 <title>Quiz-Ergebnisse</title>
 <link rel="stylesheet" href="/static/css/style.css">
 <style>
-  .quiz-result-card {{ cursor: pointer; }}
+  .quiz-group {{ cursor: pointer; margin-bottom: 1rem; }}
   .quiz-score-bar {{
     display: block; height: 8px; background: var(--bg-hover);
     border-radius: 4px; overflow: hidden; margin-top: 0.4rem;
@@ -704,6 +757,18 @@ def quiz_results_page():
     display: block; height: 100%; background: var(--accent);
     border-radius: 4px; transition: width 0.3s;
   }}
+  .quiz-versions {{
+    list-style: none; padding: 0; margin: 0.6rem 0 0 0;
+    font-size: 0.85rem; color: var(--text-muted);
+  }}
+  .quiz-versions li {{
+    display: flex; gap: 0.8rem; padding: 0.25rem 0;
+    border-bottom: 1px solid var(--border);
+  }}
+  .quiz-versions li:last-child {{ border-bottom: none; }}
+  .ver-label {{ font-weight: 600; color: var(--text); min-width: 6rem; }}
+  .ver-score {{ color: var(--accent); min-width: 6rem; }}
+  .ver-ts {{ flex: 1; }}
   .quiz-detail {{
     background: var(--bg-card); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 1rem; margin-top: 1.5rem;
@@ -718,10 +783,8 @@ def quiz_results_page():
   <h1>📊 Quiz-Ergebnisse</h1>
 </header>
 <main>
-  <p class="quiz-progress">Alle gespeicherten Quiz-Versuche · automatisch aktualisiert bei jedem Submit.</p>
-  <section class="reports-grid">
-    {cards}
-  </section>
+  <p class="quiz-progress">Alle gespeicherten Quiz-Versuche · gruppiert nach Quiz + Version · automatisch aktualisiert bei jedem Submit.</p>
+  {cards_html}
   <h2 style="margin-top:2rem">Details (JSON)</h2>
   <pre class="quiz-detail" id="quiz-detail">{detail}</pre>
 </main>
@@ -730,7 +793,7 @@ def quiz_results_page():
 (function () {{
   "use strict";
   var detail = document.getElementById("quiz-detail");
-  document.querySelectorAll(".quiz-result-card").forEach(function (card) {{
+  document.querySelectorAll(".quiz-group").forEach(function (card) {{
     card.addEventListener("click", function () {{
       detail.scrollIntoView({{behavior: "smooth", block: "start"}});
     }});
