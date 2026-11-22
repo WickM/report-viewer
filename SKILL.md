@@ -42,7 +42,7 @@ if echo "$HEALTH" | grep -q '"status": "ok"'; then
   echo "Backend already running"
 else
   echo "Backend not running — starting it..."
-  cd /media/HA_EXTERN/freigabe/projekte/report-viewer
+  cd /config/clawd/skills/report-viewer
   nohup ./start.sh >/tmp/rv.log 2>&1 &
   sleep 2
   # Verify
@@ -148,7 +148,7 @@ Interactive quizzes are plain `html` reports — no extra server format needed.
 
 If the backend is unreachable and cannot be started:
 - Do **not** execute the skill.
-- Tell the user: "Report-Viewer backend not reachable at localhost:8765 — skill deactivation. Check `/tmp/rv.log` or run `cd /media/HA_EXTERN/freigabe/projekte/report-viewer && ./start.sh` manually."
+- Tell the user: "Report-Viewer backend not reachable at localhost:8765 — skill deactivation. Check `/tmp/rv.log` or run `cd /config/clawd/skills/report-viewer && ./start.sh` manually."
 - Never produce fake URLs.
 
 ## 6. Smoke tests (definition of done)
@@ -161,7 +161,7 @@ If the backend is unreachable and cannot be started:
 
 ## 7. References
 
-- Viewer project: `/media/HA_EXTERN/freigabe/projekte/report-viewer/`
+- Viewer project (skill dir): `/config/clawd/skills/report-viewer/`
 - Similar skill: `skills/session-closeout/SKILL.md`
 - Quiz template: `references/quiz-template.html`
 - Quiz results dashboard: `/quiz-results` (live, auto-aggregiert)

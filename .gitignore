@@ -5,6 +5,7 @@ logs/
 backups/
 reports/
 uploads/
+results/
 *.log
 .env
-.results/
+.openclaw/
