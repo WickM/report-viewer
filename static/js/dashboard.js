@@ -15,7 +15,6 @@
     menu.hidden = true;
     menu.innerHTML =
       '<button data-act="view">📄 Ansehen</button>' +
-      '<button data-act="comment">💬 Kommentare</button>' +
       '<button data-act="download">⬇️ Herunterladen</button>' +
       '<button data-act="delete" class="danger">🗑️ Löschen</button>';
     document.body.appendChild(menu);
@@ -38,8 +37,6 @@
   function onContextAction(act, filename) {
     hideContext();
     if (act === "view") {
-      window.location.href = "/view/" + encodeURIComponent(filename);
-    } else if (act === "comment") {
       window.location.href = "/view/" + encodeURIComponent(filename);
     } else if (act === "download") {
       var a = document.createElement("a");
