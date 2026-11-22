@@ -887,12 +887,6 @@ def quiz_results_page():
 </main>
 <footer><small>Report-Viewer · Quiz-Results</small></footer>
 
-<!-- Kontextmenü für Versions-Löschung -->
-<div class="ctx-menu" id="ctx-menu" hidden>
-  <button data-act="show-json">📋 JSON Details</button>
-  <button data-act="download-json">⬇️ JSON herunterladen</button>
-  <button data-act="delete-version" class="danger">🗑️ Löschen</button>
-</div>
 <div class="json-overlay" id="json-overlay" hidden>
   <div class="json-overlay-content" id="json-overlay-content"></div>
   <button class="json-overlay-close" id="json-overlay-close">Schließen</button>
@@ -901,147 +895,179 @@ def quiz_results_page():
 <script>
 (function () {{
   "use strict";
-  var ctx = document.getElementById("ctx-menu");
+
+  var ctx = null;
   var pressTimer = null;
   var longPressed = false;
+  var startX = 0, startY = 0;
 
-  function showCtx(x, y, quizId) {{
-    ctx.dataset.quizId = quizId;
-    ctx.dataset.openedViaTouch = "1";
+  /* Kontext-Menü aufbauen (identisch zum Dashboard) */
+  function buildContext() {{
+    var menu = document.createElement("div");
+    menu.id = "ctx-menu";
+    menu.className = "ctx-menu";
+    menu.hidden = true;
+    menu.innerHTML =
+      '<button data-act="show-json">📋 JSON Details</button>' +
+      '<button data-act="download-json">⬇️ JSON herunterladen</button>' +
+      '<button data-act="delete-version" class="danger">🗑️ Löschen</button>';
+    document.body.appendChild(menu);
+    return menu;
+  }}
+
+  function showContext(x, y, base) {{
+    if (!ctx) ctx = buildContext();
+    ctx.dataset.quizBase = base;
     ctx.hidden = false;
     var w = ctx.offsetWidth, h = ctx.offsetHeight;
     ctx.style.left = Math.min(x, window.innerWidth - w - 8) + "px";
     ctx.style.top = Math.min(y, window.innerHeight - h - 8) + "px";
   }}
-  var ctxSuppressUntil = 0;
-  function hideCtx() {{ if (ctx) {{ ctx.hidden = true; ctxSuppressUntil = Date.now() + 400; }} }}
 
-  ctx.addEventListener("pointerdown", function (e) {{
-    var btn = e.target.closest("button[data-act]");
-    if (!btn) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (!btn) return;
-    var base = ctx.dataset.quizId;
-    hideCtx();
-    if (btn.dataset.act === "delete-version") {{
+  function hideContext() {{ if (ctx) ctx.hidden = true; }}
+
+  /* Karten-Kontext: Quiz-Base aus dem Menü-State */
+  function currentBase() {{
+    return (ctx && ctx.dataset.quizBase) ? ctx.dataset.quizBase : "";
+  }}
+
+  /* Versions-IDs der aktiven Kachel */
+  function versionIds(base) {{
+    var summary = document.querySelector('.quiz-summary[data-quiz-base="' + CSS.escape(base) + '"]');
+    if (!summary) return [];
+    var details = summary.closest("details") || summary.parentElement;
+    return Array.prototype.map.call(
+      details.querySelectorAll(".quiz-version"),
+      function (li) {{ return li.dataset.quizId; }}
+    );
+  }}
+
+  /* JSON für aktive Kachel laden (client-seitig gefiltert) */
+  function fetchJson(base) {{
+    return fetch("/api/quiz/results")
+      .then(function (r) {{ return r.json(); }})
+      .then(function (all) {{
+        var vids = versionIds(base);
+        return all.filter(function (r) {{
+          var f = (r._file || "").replace(/\.json$/, "");
+          return vids.some(function (v) {{ return f === v || f.indexOf(v) === 0; }});
+        }});
+      }});
+  }}
+
+  function onContextAction(act) {{
+    var base = currentBase();
+    hideContext();
+
+    if (act === "delete-version") {{
       if (!confirm('Quiz "' + base + '" mit ALLEN Versionen löschen?')) return;
-      var card = ctx.closest("main").querySelector('.quiz-summary[data-quiz-base="' + CSS.escape(base) + '"]');
-      var ids = card ? Array.prototype.map.call(card.parentElement.querySelectorAll(".quiz-version"), function (li) {{ return li.dataset.quizId; }}) : [];
-      Promise.all(ids.map(function (qid) {{
+      Promise.all(versionIds(base).map(function (qid) {{
         return fetch("/api/quiz/results?quiz_id=" + encodeURIComponent(qid), {{ method: "DELETE" }});
       }})).then(function () {{ location.reload(); }});
-    }} else if (btn.dataset.act === "show-json" || btn.dataset.act === "download-json") {{
-      /* fetch all results, filter by quiz_id prefix */
-      fetch("/api/quiz/results")
-        .then(function (r) {{ return r.json(); }})
-        .then(function (allResults) {{
-          var ids = Array.prototype.map.call(
-            document.querySelectorAll('.quiz-summary[data-quiz-base="' + CSS.escape(base) + '"]'),
-            function (s) {{ return s.dataset.quizBase; }}
-          );
-          /* also get versions from the card's version list */
-          var card = ctx.closest("main").querySelector('.quiz-summary[data-quiz-base="' + CSS.escape(base) + '"]');
-          var versionIds = card ? Array.prototype.map.call(
-            card.parentElement.querySelectorAll(".quiz-version"),
-            function (li) {{ return li.dataset.quizId; }}
-          ) : [];
-          /* filter: match results whose _file starts with any versionId (without .json) */
-          var filtered = allResults.filter(function (r) {{
-            var f = (r._file || "").replace(/\.json$/, "");
-            return versionIds.some(function (vid) {{ return f === vid || f.indexOf(vid) === 0; }});
-          }});
-          var merged = filtered.length === 1 ? filtered[0] : {{ quizzes: filtered }};
-          var jsonStr = JSON.stringify(merged, null, 2);
-          if (btn.dataset.act === "show-json") {{
-            overlayContent.textContent = jsonStr;
-            overlay.hidden = false;
-          }} else {{
-            var blob = new Blob([jsonStr], {{ type: "application/json" }});
-            var url = URL.createObjectURL(blob);
-            var a = document.createElement("a");
-            a.href = url; a.download = base + "-results.json"; a.click();
-            URL.revokeObjectURL(url);
-          }}
-        }});
+      return;
     }}
-  }});
 
-  /* Klick auf Karte → Long-Press-Schutz */
-  document.querySelectorAll(".quiz-group").forEach(function (card) {{
-    card.addEventListener("click", function (e) {{
-      if (e.target.closest(".ctx-menu")) return;
-      if (longPressed) {{ longPressed = false; return; }}
-    }});
-  }});
+    fetchJson(base).then(function (rows) {{
+      var payload = rows.length === 1 ? rows[0] : {{ quizzes: rows }};
+      var jsonStr = JSON.stringify(payload, null, 2);
 
-  /* JSON-Overlay */
-  var overlay = document.getElementById("json-overlay");
-  var overlayContent = document.getElementById("json-overlay-content");
-  var overlayClose = document.getElementById("json-overlay-close");
-  overlayClose.addEventListener("click", function () {{ overlay.hidden = true; }});
-  overlay.addEventListener("click", function (e) {{
-    if (e.target === overlay) overlay.hidden = true;
-  }});
-  document.addEventListener("keydown", function (e) {{
-    if (e.key === "Escape" && !overlay.hidden) overlay.hidden = true;
-  }});
-
-  /* Long-Press (Maus + Touch) / Rechtsklick auf HAUPT-Kachel → Kontextmenü */
-  var startX = 0, startY = 0;
-  document.querySelectorAll(".quiz-summary").forEach(function (summary) {{
-    var base = summary.dataset.quizBase;
-
-    summary.addEventListener("contextmenu", function (e) {{
-      e.preventDefault();
-      showCtx(e.clientX, e.clientY, base);
-    }});
-
-    summary.addEventListener("mousedown", function (e) {{
-      if (e.button !== 0) return;
-      longPressed = false;
-      pressTimer = setTimeout(function () {{
-        longPressed = true;
-        showCtx(e.clientX, e.clientY, base);
-      }}, 500);
-    }});
-    summary.addEventListener("mouseup", function () {{ clearTimeout(pressTimer); }});
-    summary.addEventListener("mouseleave", function () {{ clearTimeout(pressTimer); }});
-
-    /* Touch Long-Press (Handy) */
-    summary.addEventListener("touchstart", function (e) {{
-      if (e.touches.length !== 1) return;
-      var t = e.touches[0];
-      startX = t.clientX; startY = t.clientY;
-      longPressed = false;
-      pressTimer = setTimeout(function () {{
-        longPressed = true;
-        showCtx(startX, startY, base);
-      }}, 500);
-    }}, {{ passive: true }});
-
-    summary.addEventListener("touchend", function () {{
-      clearTimeout(pressTimer);
-      if (longPressed) {{ e.preventDefault(); }}
-    }});
-    summary.addEventListener("touchmove", function (e) {{
-      if (e.touches.length !== 1) return;
-      var t = e.touches[0];
-      if (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10) {{
-        clearTimeout(pressTimer);
+      if (act === "show-json") {{
+        var overlay = document.getElementById("json-overlay");
+        var content = document.getElementById("json-overlay-content");
+        if (!overlay || !content) return;
+        content.textContent = jsonStr;
+        overlay.hidden = false;
+      }} else if (act === "download-json") {{
+        var blob = new Blob([jsonStr], {{ type: "application/json" }});
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = base + "-results.json";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
       }}
-    }}, {{ passive: true }});
-  }});
+    }});
+  }}
 
-  /* Schließen bei Klick außerhalb */
-  document.addEventListener("click", function (e) {{
-    if (!ctx || ctx.hidden) return;
-    if (ctx.contains(e.target)) return;
-    if (Date.now() < ctxSuppressUntil) return;
-    hideCtx();
-  }});
-  document.addEventListener("keydown", function (e) {{
-    if (e.key === "Escape") hideCtx();
+  document.addEventListener("DOMContentLoaded", function () {{
+    /* Kontext-Menü aufbauen */
+    ctx = buildContext();
+    ctx.addEventListener("click", function (e) {{
+      var btn = e.target.closest("button[data-act]");
+      if (!btn) return;
+      onContextAction(btn.dataset.act);
+    }});
+
+    /* Hauptkacheln verdrahten (identisch zum Dashboard) */
+    document.querySelectorAll(".quiz-summary").forEach(function (summary) {{
+      var base = summary.dataset.quizBase;
+
+      /* Klick: Long-Press unterdrücken */
+      summary.addEventListener("click", function (e) {{
+        if (e.target.closest("#ctx-menu")) return;
+        if (longPressed) {{ longPressed = false; return; }}
+      }});
+
+      /* Rechtsklick → Kontextmenü */
+      summary.addEventListener("contextmenu", function (e) {{
+        e.preventDefault();
+        showContext(e.clientX, e.clientY, base);
+      }});
+
+      /* Long-Press (Maus, 500ms) → Kontextmenü */
+      summary.addEventListener("mousedown", function (e) {{
+        if (e.button !== 0) return;
+        if (e.target.closest("#ctx-menu")) return;
+        longPressed = false;
+        pressTimer = setTimeout(function () {{
+          longPressed = true;
+          showContext(e.clientX, e.clientY, base);
+        }}, 500);
+      }});
+      summary.addEventListener("mouseup", function () {{ clearTimeout(pressTimer); }});
+      summary.addEventListener("mouseleave", function () {{ clearTimeout(pressTimer); }});
+
+      /* Long-Press (Touch, 500ms) → Kontextmenü */
+      summary.addEventListener("touchstart", function (e) {{
+        if (e.touches.length !== 1) return;
+        var t = e.touches[0];
+        startX = t.clientX; startY = t.clientY;
+        longPressed = false;
+        pressTimer = setTimeout(function () {{
+          longPressed = true;
+          showContext(startX, startY, base);
+        }}, 500);
+      }}, {{ passive: true }});
+
+      summary.addEventListener("touchend", function () {{ clearTimeout(pressTimer); }});
+      summary.addEventListener("touchmove", function (e) {{
+        if (e.touches.length !== 1) return;
+        var t = e.touches[0];
+        if (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10) {{
+          clearTimeout(pressTimer);
+        }}
+      }}, {{ passive: true }});
+    }});
+
+    /* Escape schließt Menü + Overlay */
+    document.addEventListener("keydown", function (e) {{
+      if (e.key !== "Escape") return;
+      hideContext();
+      var ov = document.getElementById("json-overlay");
+      if (ov) ov.hidden = true;
+    }});
+
+    /* Overlay schließen */
+    var overlay = document.getElementById("json-overlay");
+    var closeBtn = document.getElementById("json-overlay-close");
+    if (overlay && closeBtn) {{
+      closeBtn.addEventListener("click", function () {{ overlay.hidden = true; }});
+      overlay.addEventListener("click", function (e) {{
+        if (e.target === overlay) overlay.hidden = true;
+      }});
+    }}
   }});
 }})();
 </script>
