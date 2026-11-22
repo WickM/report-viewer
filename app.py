@@ -875,24 +875,38 @@ def quiz_results_page():
         return fetch("/api/quiz/results?quiz_id=" + encodeURIComponent(qid), {{ method: "DELETE" }});
       }})).then(function () {{ location.reload(); }});
     }} else if (btn.dataset.act === "show-json" || btn.dataset.act === "download-json") {{
-      var card = ctx.closest("main").querySelector('.quiz-summary[data-quiz-base="' + CSS.escape(base) + '"]');
-      var ids = card ? Array.prototype.map.call(card.parentElement.querySelectorAll(".quiz-version"), function (li) {{ return li.dataset.quizId; }}) : [];
-      Promise.all(ids.map(function (qid) {{
-        return fetch("/api/quiz/results?quiz_id=" + encodeURIComponent(qid)).then(function (r) {{ return r.json(); }});
-      }})).then(function (results) {{
-        var merged = results.length === 1 ? results[0] : {{ quizzes: results }};
-        var jsonStr = JSON.stringify(merged, null, 2);
-        if (btn.dataset.act === "show-json") {{
-          overlayContent.textContent = jsonStr;
-          overlay.hidden = false;
-        }} else {{
-          var blob = new Blob([jsonStr], {{ type: "application/json" }});
-          var url = URL.createObjectURL(blob);
-          var a = document.createElement("a");
-          a.href = url; a.download = base + "-results.json"; a.click();
-          URL.revokeObjectURL(url);
-        }}
-      }});
+      /* fetch all results, filter by quiz_id prefix */
+      fetch("/api/quiz/results")
+        .then(function (r) {{ return r.json(); }})
+        .then(function (allResults) {{
+          var ids = Array.prototype.map.call(
+            document.querySelectorAll('.quiz-summary[data-quiz-base="' + CSS.escape(base) + '"]'),
+            function (s) {{ return s.dataset.quizBase; }}
+          );
+          /* also get versions from the card's version list */
+          var card = ctx.closest("main").querySelector('.quiz-summary[data-quiz-base="' + CSS.escape(base) + '"]');
+          var versionIds = card ? Array.prototype.map.call(
+            card.parentElement.querySelectorAll(".quiz-version"),
+            function (li) {{ return li.dataset.quizId; }}
+          ) : [];
+          /* filter: match results whose _file starts with any versionId (without .json) */
+          var filtered = allResults.filter(function (r) {{
+            var f = (r._file || "").replace(/\.json$/, "");
+            return versionIds.some(function (vid) {{ return f === vid || f.indexOf(vid) === 0; }});
+          }});
+          var merged = filtered.length === 1 ? filtered[0] : {{ quizzes: filtered }};
+          var jsonStr = JSON.stringify(merged, null, 2);
+          if (btn.dataset.act === "show-json") {{
+            overlayContent.textContent = jsonStr;
+            overlay.hidden = false;
+          }} else {{
+            var blob = new Blob([jsonStr], {{ type: "application/json" }});
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement("a");
+            a.href = url; a.download = base + "-results.json"; a.click();
+            URL.revokeObjectURL(url);
+          }}
+        }});
     }}
   }});
 
