@@ -333,6 +333,7 @@ def _render_index(reports):
   <h1>📄 Report-Viewer</h1>
   <nav>
     <a href="/">Übersicht</a>
+    <a href="/quiz-results">📊 Quiz-Ergebnisse</a>
   </nav>
 </header>
 <main>
@@ -640,6 +641,105 @@ def api_quiz_results():
             pass
     out.sort(key=lambda c: c.get("ts", ""), reverse=True)
     return jsonify(out[:200])
+
+
+# ---------------------------------------------------------------------------
+# Routes — Quiz results dashboard (auto-aggregiert, keine separate Datei)
+# ---------------------------------------------------------------------------
+
+@app.route("/quiz-results")
+def quiz_results_page():
+    """Aggregiert alle Quiz-Ergebnisse live aus /api/quiz/results — wird bei jedem Quiz-Submit automatisch aktuell."""
+    rows = []
+    for fp in sorted(RESULTS_DIR.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
+        try:
+            data = json.loads(fp.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not data:
+            continue
+        filename = fp.name[:-5]  # .json strippen
+        for e in data:
+            score = e.get("score") or 0
+            total = e.get("total") or 1
+            pct = round(100 * score / total)
+            answers = e.get("answers") or []
+            rows.append({
+                "filename": filename,
+                "score": score,
+                "total": total,
+                "pct": pct,
+                "ts": e.get("ts", ""),
+                "id": e.get("id", ""),
+                "answers": answers,
+            })
+    rows.sort(key=lambda r: r["ts"], reverse=True)
+
+    cards = "".join(
+        f'<div class="card quiz-result-card" data-filename="{r["filename"]}" tabindex="0">'
+        f'<span class="card-title">{r["filename"]}</span>'
+        f'<span class="card-meta">{r["ts"]} · {r["score"]}/{r["total"]} · {r["pct"]}%</span>'
+        f'<span class="quiz-score-bar"><span style="width:{r["pct"]}%"></span></span>'
+        f'</div>'
+        for r in rows
+    ) or '<p class="empty">Noch keine Quiz-Ergebnisse vorhanden.</p>'
+
+    # Detail-Ansicht (JSON-Liste) für "langer Klick / Download"
+    detail = json.dumps(rows, ensure_ascii=False, indent=2)
+
+    html = f"""<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quiz-Ergebnisse</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<style>
+  .quiz-result-card {{ cursor: pointer; }}
+  .quiz-score-bar {{
+    display: block; height: 8px; background: var(--bg-hover);
+    border-radius: 4px; overflow: hidden; margin-top: 0.4rem;
+  }}
+  .quiz-score-bar > span {{
+    display: block; height: 100%; background: var(--accent);
+    border-radius: 4px; transition: width 0.3s;
+  }}
+  .quiz-detail {{
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem; margin-top: 1.5rem;
+    font-family: monospace; font-size: 0.8rem; white-space: pre-wrap;
+    max-height: 400px; overflow: auto;
+  }}
+</style>
+</head>
+<body>
+<header>
+  <a href="/">← Übersicht</a>
+  <h1>📊 Quiz-Ergebnisse</h1>
+</header>
+<main>
+  <p class="quiz-progress">Alle gespeicherten Quiz-Versuche · automatisch aktualisiert bei jedem Submit.</p>
+  <section class="reports-grid">
+    {cards}
+  </section>
+  <h2 style="margin-top:2rem">Details (JSON)</h2>
+  <pre class="quiz-detail" id="quiz-detail">{detail}</pre>
+</main>
+<footer><small>Report-Viewer · Quiz-Results</small></footer>
+<script>
+(function () {{
+  "use strict";
+  var detail = document.getElementById("quiz-detail");
+  document.querySelectorAll(".quiz-result-card").forEach(function (card) {{
+    card.addEventListener("click", function () {{
+      detail.scrollIntoView({{behavior: "smooth", block: "start"}});
+    }});
+  }});
+}})();
+</script>
+</body>
+</html>"""
+    return Response(html, mimetype="text/html")
 
 
 # ---------------------------------------------------------------------------
