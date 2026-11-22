@@ -685,9 +685,12 @@ def api_quiz_results_delete():
 
 @app.route("/quiz-results")
 def quiz_results_page():
-    """Aggregiert alle Quiz-Ergebnisse live, gruppiert nach Quiz (Base) + Version (quiz_id)."""
-    # Gruppieren: base -> {version -> [entries]}
-    groups = {}  # base_id -> list of (version, entry)
+    """Aggregiert alle Quiz-Ergebnisse live, gruppiert nach Quiz (Base) + Version (quiz_id).
+    Jede Version hat ein Kontextmenü (Long-Press / Rechtsklick) mit Löschen-Funktion."""
+    import html as html_mod
+
+    # Gruppieren: base -> [entries]
+    groups = {}
     for fp in sorted(RESULTS_DIR.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
         try:
             data = json.loads(fp.read_text(encoding="utf-8"))
@@ -695,14 +698,12 @@ def quiz_results_page():
             continue
         for e in data:
             qid = (e.get("quiz_id") or "").strip() or fp.name[:-5]
-            # base = quiz_id ohne -vX Suffix
             base = re.sub(r'-v\d+$', '', qid)
-            version = qid
             score = e.get("score") or 0
             total = e.get("total") or 1
             pct = round(100 * score / total)
             groups.setdefault(base, []).append({
-                "version": version,
+                "version": qid,
                 "score": score,
                 "total": total,
                 "pct": pct,
@@ -711,21 +712,22 @@ def quiz_results_page():
                 "answers": e.get("answers") or [],
             })
 
-    # Sort each group by ts desc
     for base in groups:
         groups[base].sort(key=lambda x: x["ts"], reverse=True)
 
-    # Build cards: one per quiz (base), with versions inside
-    import html as html_mod
+    # Build cards: one per quiz (base), versions inside with delete buttons
     cards = []
     for base, entries in sorted(groups.items(), key=lambda kv: kv[1][0]["ts"] if kv[1] else "", reverse=True):
         total_score = sum(e["score"] for e in entries)
         total_total = sum(e["total"] for e in entries)
         overall_pct = round(100 * total_score / total_total) if total_total else 0
         versions_html = "".join(
-            f'<li><span class="ver-label">{html_mod.escape(e["version"])}</span>'
+            f'<li class="quiz-version" data-quiz-id="{html_mod.escape(e["version"])}">'
+            f'<span class="ver-label">{html_mod.escape(e["version"])}</span>'
             f'<span class="ver-score">{e["score"]}/{e["total"]} · {e["pct"]}%</span>'
-            f'<span class="ver-ts">{html_mod.escape(e["ts"])}</span></li>'
+            f'<span class="ver-ts">{html_mod.escape(e["ts"])}</span>'
+            f'<span class="ver-hint">Rechtsklick / Long-Press für Löschen</span>'
+            f'</li>'
             for e in entries
         )
         cards.append(
@@ -762,13 +764,32 @@ def quiz_results_page():
     font-size: 0.85rem; color: var(--text-muted);
   }}
   .quiz-versions li {{
-    display: flex; gap: 0.8rem; padding: 0.25rem 0;
+    display: flex; gap: 0.8rem; padding: 0.3rem 0;
     border-bottom: 1px solid var(--border);
+    cursor: pointer;
   }}
   .quiz-versions li:last-child {{ border-bottom: none; }}
-  .ver-label {{ font-weight: 600; color: var(--text); min-width: 6rem; }}
+  .quiz-versions li:hover {{ background: var(--bg-hover); }}
+  .ver-label {{ font-weight: 600; color: var(--text); min-width: 8rem; }}
   .ver-score {{ color: var(--accent); min-width: 6rem; }}
   .ver-ts {{ flex: 1; }}
+  .ver-hint {{ color: var(--text-muted); font-size: 0.75rem; opacity: 0; }}
+  .quiz-version:hover .ver-hint {{ opacity: 0.6; }}
+  .ctx-menu {{
+    position: fixed; z-index: 9999; min-width: 160px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    padding: 4px; display: flex; flex-direction: column; gap: 2px;
+  }}
+  .ctx-menu[hidden] {{ display: none; }}
+  .ctx-menu button {{
+    background: none; border: none; color: var(--text);
+    text-align: left; padding: 8px 12px; font-size: 0.92rem;
+    border-radius: 6px; cursor: pointer; white-space: nowrap;
+  }}
+  .ctx-menu button:hover {{ background: var(--bg-hover); }}
+  .ctx-menu button.danger {{ color: #f85149; }}
+  .ctx-menu button.danger:hover {{ background: rgba(248,81,73,0.1); }}
   .quiz-detail {{
     background: var(--bg-card); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 1rem; margin-top: 1.5rem;
@@ -789,14 +810,78 @@ def quiz_results_page():
   <pre class="quiz-detail" id="quiz-detail">{detail}</pre>
 </main>
 <footer><small>Report-Viewer · Quiz-Results</small></footer>
+
+<!-- Kontextmenü für Versions-Löschung -->
+<div class="ctx-menu" id="ctx-menu" hidden>
+  <button data-act="delete-version" class="danger">🗑️ Version löschen</button>
+</div>
+
 <script>
 (function () {{
   "use strict";
   var detail = document.getElementById("quiz-detail");
+  var ctx = document.getElementById("ctx-menu");
+  var pressTimer = null;
+  var longPressed = false;
+
+  function showCtx(x, y, quizId) {{
+    ctx.dataset.quizId = quizId;
+    ctx.hidden = false;
+    var w = ctx.offsetWidth, h = ctx.offsetHeight;
+    ctx.style.left = Math.min(x, window.innerWidth - w - 8) + "px";
+    ctx.style.top = Math.min(y, window.innerHeight - h - 8) + "px";
+  }}
+  function hideCtx() {{ if (ctx) ctx.hidden = true; }}
+
+  ctx.addEventListener("click", function (e) {{
+    var btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    var quizId = ctx.dataset.quizId;
+    hideCtx();
+    if (btn.dataset.act === "delete-version") {{
+      if (!confirm('Quiz-Version "' + quizId + '" wirklich löschen?')) return;
+      fetch("/api/quiz/results?quiz_id=" + encodeURIComponent(quizId), {{ method: "DELETE" }})
+        .then(function (r) {{ return r.json(); }})
+        .then(function () {{ location.reload(); }});
+    }}
+  }});
+
+  /* Klick auf Karte → scroll zu Details */
   document.querySelectorAll(".quiz-group").forEach(function (card) {{
-    card.addEventListener("click", function () {{
+    card.addEventListener("click", function (e) {{
+      if (e.target.closest(".ctx-menu")) return;
+      if (longPressed) {{ longPressed = false; return; }}
       detail.scrollIntoView({{behavior: "smooth", block: "start"}});
     }});
+  }});
+
+  /* Long-Press / Rechtsklick auf Versions-Item → Kontextmenü */
+  document.querySelectorAll(".quiz-version").forEach(function (item) {{
+    var quizId = item.dataset.quizId;
+
+    item.addEventListener("contextmenu", function (e) {{
+      e.preventDefault();
+      showCtx(e.clientX, e.clientY, quizId);
+    }});
+
+    item.addEventListener("mousedown", function (e) {{
+      if (e.button !== 0) return;
+      longPressed = false;
+      pressTimer = setTimeout(function () {{
+        longPressed = true;
+        showCtx(e.clientX, e.clientY, quizId);
+      }}, 500);
+    }});
+    item.addEventListener("mouseup", function () {{ clearTimeout(pressTimer); }});
+    item.addEventListener("mouseleave", function () {{ clearTimeout(pressTimer); }});
+  }});
+
+  /* Schließen bei Klick außerhalb */
+  document.addEventListener("click", function (e) {{
+    if (ctx && !ctx.hidden && !ctx.contains(e.target)) hideCtx();
+  }});
+  document.addEventListener("keydown", function (e) {{
+    if (e.key === "Escape") hideCtx();
   }});
 }})();
 </script>
