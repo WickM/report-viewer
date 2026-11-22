@@ -138,6 +138,5 @@ If the backend is unreachable and cannot be started:
 
 ## 7. References
 
-- Infrastructure plan: `deep-plans/2026-11-21-report-viewer-skill.md`
 - Viewer project: `/media/HA_EXTERN/freigabe/projekte/report-viewer/`
 - Similar skill: `skills/session-closeout/SKILL.md`
