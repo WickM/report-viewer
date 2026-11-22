@@ -849,7 +849,6 @@ def quiz_results_page():
 <script>
 (function () {{
   "use strict";
-  var detail = document.getElementById("quiz-detail");
   var ctx = document.getElementById("ctx-menu");
   var pressTimer = null;
   var longPressed = false;
