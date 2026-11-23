@@ -1,28 +1,29 @@
 # Report Templates
 
-Vorlagen für wiederkehrende Berichte. Jede Vorlage ist eine Markdown-Datei mit Platzhaltern in `[eckigen Klammern]`. Beim Publish mit `source_path` die Platzhalter ersetzen, Rest bleibt.
+Templates for recurring reports. Each template is a Markdown file with placeholders in `[square brackets]`. When publishing with `source_path`, replace the placeholders; the rest stays as is.
 
-## Vorlagen
+## Templates
 
-| Vorlage | Wann | Format |
-|---------|------|--------|
-| `weekly-status.md` | Wöchentlicher Statusbericht (Mo-Fr, Ampel, Top-3) | `md` |
-| `research-summary.md` | Recherche-Zusammenfassung (These, Evidenz, Contra, Fazit) | `md` |
-| `architecture-decision.md` | Architektur-Entscheidung (ADR-Format: Kontext, Entscheidung, Konsequenzen) | `md` |
-| `quiz-template.html` | Interaktives Quiz mit Multiple-Choice + automatischer Ergebnis-Speicherung | `html` |
+| Template | When | Format |
+|----------|------|--------|
+| `weekly-status.md` | Weekly status report (Mon–Fri, traffic light, top 3) | `md` |
+| `research-summary.md` | Research summary (thesis, evidence, counter-evidence, conclusion) | `md` |
+| `architecture-decision.md` | Architecture decision (ADR format: context, decision, consequences) | `md` |
+| `flashcard-wine.md` | Wine flashcard set (front/back cards, self-rating) | `md` / `html` |
+| `quiz-template.html` | Interactive quiz with multiple choice + automatic result saving | `html` |
 
-## Eigene Vorlage
+## Custom template
 
-Siehe `CUSTOM.md` — 5 Schritte zur eigenen Vorlage.
+See `CUSTOM.md` — five steps to your own template.
 
-## Verwendung
+## Usage
 
-1. Vorlage aus `references/` kopieren
-2. Platzhalter `[...]` ersetzen
-3. Als `.md`-Datei speichern (z.B. im Brain-Vault unter `03_Projects/` oder `brain/research/`)
-4. Mit `source_path` publizieren:
+1. Copy a template from `references/`
+2. Replace the `[...]` placeholders
+3. Save as a `.md` file (e.g. in the brain vault under `03_Projects/` or `brain/research/`)
+4. Publish with `source_path`:
    ```bash
    curl -s -X POST http://localhost:8765/api/publish \
      -H "Content-Type: application/json" \
-     -d '{"title":"[Titel]","format":"md","source_path":"/pfad/zur/datei.md"}'
+     -d '{"title":"[Title]","format":"md","source_path":"/path/to/file.md"}'
    ```

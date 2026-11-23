@@ -1,33 +1,33 @@
-# [Projekt / Team] — Wochenstatus
+# [Project / Team] — Weekly Status
 
-**Zeitraum:** [KW XX, YYYY-MM-DD bis YYYY-MM-DD]
-**Status:** [🟢 grün / 🟡 gelb / 🔴 rot]
+**Period:** [CW XX, YYYY-MM-DD to YYYY-MM-DD]
+**Status:** [🟢 green / 🟡 yellow / 🔴 red]
 
-## Top-3 Highlights
+## Top 3 highlights
 
-1. [Highlight 1 — was wurde erreicht]
-2. [Highlight 2 — was wurde erreicht]
-3. [Highlight 3 — was wurde erreicht]
+1. [Highlight 1 — what was achieved]
+2. [Highlight 2 — what was achieved]
+3. [Highlight 3 — what was achieved]
 
-## Fortschritt
+## Progress
 
-| Bereich | Soll | Ist | Delta | Ampel |
-|---------|------|-----|-------|-------|
-| [Bereich 1] | [Ziel] | [Ist-Stand] | [+/-] | [🟢🟡🔴] |
-| [Bereich 2] | [Ziel] | [Ist-Stand] | [+/-] | [🟢🟡🔴] |
-| [Bereich 3] | [Ziel] | [Ist-Stand] | [+/-] | [🟢🟡🔴] |
+| Area | Target | Actual | Delta | Traffic light |
+|------|--------|--------|-------|---------------|
+| [Area 1] | [Goal] | [Actual status] | [+/-] | [🟢🟡🔴] |
+| [Area 2] | [Goal] | [Actual status] | [+/-] | [🟢🟡🔴] |
+| [Area 3] | [Goal] | [Actual status] | [+/-] | [🟢🟡🔴] |
 
-## Risiken & Blocker
+## Risks & blockers
 
-- [Risiko/Blocker 1 — Eintrittswahrscheinlichkeit, Impact, Mitigation]
-- [Risiko/Blocker 2]
+- [Risk/blocker 1 — likelihood, impact, mitigation]
+- [Risk/blocker 2]
 
-## Nächste Woche
+## Next week
 
-- [ ] [Aufgabe 1]
-- [ ] [Aufgabe 2]
-- [ ] [Aufgabe 3]
+- [ ] [Task 1]
+- [ ] [Task 2]
+- [ ] [Task 3]
 
-## Kommentare / Feedback
+## Comments / feedback
 
-<!-- Leser können hier markieren und kommentieren: Text auswählen → Popover → Kommentar -->
+<!-- Readers can mark text and comment: select text → popover → comment -->

@@ -1,65 +1,65 @@
-# Eigene Report-Vorlage erstellen
+# Create Your Own Report Template
 
-5 Schritte, um eine neue Vorlage für wiederkehrende Berichte anzulegen.
+Five steps to add a new template for recurring reports.
 
-## Schritt 1: Vorlage kopieren
+## Step 1: Copy a template
 
 ```bash
-cp references/weekly-status.md references/[mein-bericht].md
+cp references/weekly-status.md references/[my-report].md
 ```
 
-Oder eine bestehende Vorlage als Basis nehmen und anpassen.
+Or start from any existing template and adapt it.
 
-## Schritt 2: Platzhalter definieren
+## Step 2: Define placeholders
 
-Ersetze alle `[eckigen Klammern]` durch konkrete Platzhalter, die zu deinem Bericht passen. Faustregel:
+Replace every `[square bracket]` placeholder with concrete content for your report. Rule of thumb:
 
-- **Inhalt** = `[was hier steht]`
-- **Struktur** = `[wie viele Punkte / Zeilen]`
-- **Format** = `[Ampel, Datum, URL, etc.]`
+- **Content** = `[what goes here]`
+- **Structure** = `[how many points / rows]`
+- **Format** = `[traffic light, date, URL, etc.]`
 
-Beispiel:
+Example:
 ```markdown
-# [Projekt] — [Berichtstyp]
-**Zeitraum:** [KW XX]
+# [Project] — [Report type]
+**Period:** [CW XX]
 **Status:** [🟢🟡🔴]
 ```
 
-## Schritt 3: In README eintragen
+## Step 3: Register it in README
 
-Füge einen Eintrag in `references/README.md` hinzu:
+Add an entry to `references/README.md`:
 
 ```markdown
-| [mein-bericht].md | [Wann verwenden?] | [Format: md/html/excalidraw] |
+| [my-report].md | [When to use it?] | [Format: md/html/excalidraw] |
 ```
 
-## Schritt 4: Testen
+## Step 4: Test
 
-Erstelle einen Test-Bericht mit der neuen Vorlage:
+Create a test report with the new template:
 
 ```bash
 curl -s -X POST http://localhost:8765/api/publish \
   -H "Content-Type: application/json" \
-  -d '{"title":"Test [mein-bericht]","format":"md","content":"# Test\n\n[Platzhalter]-Beispiel"}'
+  -d '{"title":"Test [my-report]","format":"md","content":"# Test\n\n[Placeholder] example"}'
 ```
 
-Prüfe im Browser, ob:
-- alle Platzhalter sinnvoll sind
-- das Layout (Mermaid, KaTeX, Tabellen) korrekt rendert
-- die Kommentarfunktion funktioniert
+Check in the browser that:
+- all placeholders make sense
+- the layout (Mermaid, KaTeX, tables) renders correctly
+- the comment function works
 
-## Schritt 5: Committen
+## Step 5: Commit
 
 ```bash
-git add references/[mein-bericht].md references/README.md
-git commit -m "feat: add [mein-bericht] template"
+git add references/[my-report].md references/README.md
+git commit -m "feat: add [my-report] template"
 git push
 ```
 
-Fertig. Die Vorlage ist jetzt für alle Agenten verfügbar, die den report-viewer-Skill nutzen.
+Done. The template is now available to every agent that uses the report-viewer skill.
 
-## Tipps
+## Tips
 
-- **Wiederverwendbarkeit:** Halte Platzhalter generisch (`[Projekt]` statt `[FooBar]`) damit die Vorlage für mehrere Projekte funktioniert.
-- **Versionierung:** Wenn du eine Vorlage grundlegend änderst, committe das als Breaking Change und erhöhe die Skill-Version.
-- **Beispiele:**siehe `weekly-status.md`, `research-summary.md`, `architecture-decision.md`
+- **Reusability:** Keep placeholders generic (`[Project]` instead of `[FooBar]`) so the template works for several projects.
+- **Versioning:** If you change a template fundamentally, commit it as a breaking change and bump the skill version.
+- **Examples:** see `weekly-status.md`, `research-summary.md`, `architecture-decision.md`.

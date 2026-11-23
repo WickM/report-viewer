@@ -1,39 +1,39 @@
-# [Thema] — Recherche-Zusammenfassung
+# [Topic] — Research Summary
 
-**Datum:** [YYYY-MM-DD]
-**Autor:** [Name]
-**Scope:** [Was wurde recherchiert, was nicht]
+**Date:** [YYYY-MM-DD]
+**Author:** [Name]
+**Scope:** [What was researched, what was not]
 
-## These
+## Thesis
 
-[1-2 Sätze: die zentrale Aussage, die durch die Recherche belegt oder widerlegt wird]
+[1–2 sentences: the central claim that the research supports or refutes]
 
-## Evidenz
+## Evidence
 
-### Pro (belegt die These)
+### For (supports the thesis)
 
-- [Evidenz 1 — Quelle, Datum, URL]
-- [Evidenz 2 — Quelle, Datum, URL]
+- [Evidence 1 — source, date, URL]
+- [Evidence 2 — source, date, URL]
 
-### Contra (widerlegt die These)
+### Against (refutes the thesis)
 
-- [Evidenz 1 — Quelle, Datum, URL]
-- [Evidenz 2 — Quelle, Datum, URL]
+- [Evidence 1 — source, date, URL]
+- [Evidence 2 — source, date, URL]
 
-### Neutral / Gemischt
+### Neutral / mixed
 
-- [Evidenz 1 — Quelle, Datum, URL]
+- [Evidence 1 — source, date, URL]
 
-## Fazit
+## Conclusion
 
-[2-3 Sätze: was die Evidenz insgesamt sagt, inkl. Konfidenz (hoch/mittel/niedrig)]
+[2–3 sentences: what the evidence says overall, including confidence (high/medium/low)]
 
-## Offene Fragen
+## Open questions
 
-- [ ] [Frage 1, die die Recherche nicht beantworten konnte]
-- [ ] [Frage 2]
+- [ ] [Question 1 the research could not answer]
+- [ ] [Question 2]
 
-## Quellen
+## Sources
 
-1. [Quelle 1 — Titel, URL, Datum]
-2. [Quelle 2 — Titel, URL, Datum]
+1. [Source 1 — title, URL, date]
+2. [Source 2 — title, URL, date]

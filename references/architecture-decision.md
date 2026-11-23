@@ -1,40 +1,40 @@
-# ADR-[XXX]: [Kurztitel der Entscheidung]
+# ADR-[XXX]: [Short title of the decision]
 
 **Status:** [Proposed / Accepted / Deprecated / Superseded]
-**Datum:** [YYYY-MM-DD]
-**Entscheider:** [Name / Team]
+**Date:** [YYYY-MM-DD]
+**Decision owner:** [Name / Team]
 
-## Kontext
+## Context
 
-[Was ist die Ausgangslage? Welche technischen, organisatorischen oder regulatorischen Randbedingungen bestehen? Was ist das Problem, das gelöst werden soll?]
+[What is the starting point? Which technical, organizational or regulatory constraints apply? What problem should be solved?]
 
-## Entscheidung
+## Decision
 
-[Was wird entschieden? 1-3 Sätze, klar und unmissverständlich.]
+[What is decided? 1–3 sentences, clear and unambiguous.]
 
-## Konsequenzen
+## Consequences
 
-### Positiv
+### Positive
 
-- [Vorteil 1]
-- [Vorteil 2]
+- [Benefit 1]
+- [Benefit 2]
 
-### Negativ
+### Negative
 
-- [Nachteil 1]
-- [Nachteil 2]
+- [Drawback 1]
+- [Drawback 2]
 
 ### Neutral
 
-- [Nebenwirkung, die weder positiv noch negativ ist]
+- [Side effect that is neither positive nor negative]
 
-## Alternativen
+## Alternatives
 
-| Alternative | Warum verworfen? |
-|-------------|-------------------|
-| [Alternative 1] | [Grund] |
-| [Alternative 2] | [Grund] |
+| Alternative | Why rejected? |
+|-------------|---------------|
+| [Alternative 1] | [Reason] |
+| [Alternative 2] | [Reason] |
 
-## Referenzen
+## References
 
-- [Link zu relevanten Issues, Docs, Slack-Threads]
+- [Link to relevant issues, docs, Slack threads]
