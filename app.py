@@ -290,6 +290,32 @@ def api_report_meta(filename):
     })
 
 
+@app.route("/quiz/<filename>")
+def view_quiz(filename):
+    """Serve quiz-template.html with injected quiz config (mode, quiz_id)."""
+    safe = os.path.basename(filename)
+    if not safe.endswith(".html"):
+        safe += ".html"
+    tmpl = BASE_DIR / "references" / safe
+    if not tmpl.exists():
+        abort(404)
+    html = tmpl.read_text(encoding="utf-8")
+    inject = (
+        '<script>window.__REPORT_FILENAME__=' + json.dumps(safe) + ';</script>\n'
+    )
+    qmode = request.args.get("quiz_mode")
+    qid = request.args.get("quiz_id")
+    if qmode:
+        inject += '<script>window.__QUIZ_MODE__=' + json.dumps(qmode) + ';</script>\n'
+    if qid:
+        inject += '<script>window.__QUIZ_ID__=' + json.dumps(qid) + ';</script>\n'
+    if "</body>" in html:
+        html = html.replace("</body>", inject + "</body>", 1)
+    else:
+        html += inject
+    return Response(html, mimetype="text/html")
+
+
 @app.route("/api/reports/<filename>", methods=["DELETE"])
 def api_report_delete(filename):
     """Delete a report (html file + its comments)."""
@@ -389,6 +415,12 @@ def view_report(filename):
         COMMENT_WIDGET_HTML
         + '<script>window.__REPORT_FILENAME__=' + json.dumps(safe_name) + ';</script>\n'
     )
+    qmode = request.args.get("quiz_mode")
+    qid = request.args.get("quiz_id")
+    if qmode:
+        inject += '<script>window.__QUIZ_MODE__=' + json.dumps(qmode) + ';</script>\n'
+    if qid:
+        inject += '<script>window.__QUIZ_ID__=' + json.dumps(qid) + ';</script>\n'
     if "</body>" in html:
         html = html.replace("</body>", inject + "</body>", 1)
     else:
@@ -631,10 +663,14 @@ def api_quiz_result():
     if not filename:
         return jsonify({"error": "filename required"}), 400
     quiz_id = (data.get("quiz_id") or "").strip()
+    qtype = (data.get("type") or "quiz").strip()
     entry = {
+        "type": qtype,
         "score": data.get("score"),
         "total": data.get("total"),
         "answers": data.get("answers") or [],
+        "cards": data.get("cards") or [],
+        "avg_rating": data.get("avg_rating"),
     }
     saved = _save_result(filename, entry, quiz_id)
     return jsonify(saved), 201
@@ -689,33 +725,44 @@ def quiz_results_page():
     Jede Version hat ein Kontextmenü (Long-Press / Rechtsklick) mit Löschen-Funktion."""
     import html as html_mod
 
-    # Gruppieren: base -> [entries]
+    # Gruppieren nach Typ und base (Quiz und Flashcard getrennt)
     groups = {}
+    flash_groups = {}
     for fp in sorted(RESULTS_DIR.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
         try:
             data = json.loads(fp.read_text(encoding="utf-8"))
         except Exception:
             continue
         for e in data:
+            qtype = e.get("type") or "quiz"
             qid = (e.get("quiz_id") or "").strip() or fp.name[:-5]
             base = re.sub(r'-v\d+$', '', qid)
             score = e.get("score") or 0
             total = e.get("total") or 1
-            pct = round(100 * score / total)
-            groups.setdefault(base, []).append({
+            pct = round(100 * score / total) if total else 0
+            entry = {
                 "version": qid,
+                "type": qtype,
                 "score": score,
                 "total": total,
                 "pct": pct,
                 "ts": e.get("ts", ""),
                 "id": e.get("id", ""),
                 "answers": e.get("answers") or [],
-            })
+                "cards": e.get("cards") or [],
+                "avg_rating": e.get("avg_rating"),
+            }
+            if qtype == "flashcard":
+                flash_groups.setdefault(base, []).append(entry)
+            else:
+                groups.setdefault(base, []).append(entry)
 
     for base in groups:
         groups[base].sort(key=lambda x: x["ts"], reverse=True)
+    for base in flash_groups:
+        flash_groups[base].sort(key=lambda x: x["ts"], reverse=True)
 
-    # Build cards: one per quiz (base), versions inside with delete buttons
+    # Build cards: Quiz zuerst
     cards = []
     for base, entries in sorted(groups.items(), key=lambda kv: kv[1][0]["ts"] if kv[1] else "", reverse=True):
         total_score = sum(e["score"] for e in entries)
@@ -742,7 +789,43 @@ def quiz_results_page():
             f'</details>'
             f'</div>'
         )
-    cards_html = "".join(cards) or '<p class="empty">Noch keine Quiz-Ergebnisse vorhanden.</p>'
+
+    # Flashcard-Karten separat
+    fc_cards = []
+    for base, entries in sorted(flash_groups.items(), key=lambda kv: kv[1][0]["ts"] if kv[1] else "", reverse=True):
+        latest = entries[0]
+        avg = latest.get("avg_rating")
+        avg_str = f" · Ø {avg}/5" if avg else ""
+        versions_html = "".join(
+            '<li class="quiz-version" data-quiz-id="%s">'
+            '<span class="ver-label">%s</span>'
+            '<span class="ver-score">%d Karten</span>'
+            '<span class="ver-ts">%s</span>'
+            '<span class="ver-hint">Rechtsklick / Long-Press für Löschen</span>'
+            '</li>' % (
+                html_mod.escape(e["version"]),
+                html_mod.escape(e["version"]),
+                len(e["cards"]),
+                html_mod.escape(e["ts"]),
+            )
+            for e in entries
+        )
+        fc_cards.append(
+            f'<div class="card quiz-group fc-group">'
+            f'<details>'
+            f'<summary class="quiz-summary" data-quiz-base="{html_mod.escape(base)}">'
+            f'<span class="card-title">🃏 {html_mod.escape(base)}</span>'
+            f'<span class="card-meta">{len(entries)} Karte(n){avg_str} · {html_mod.escape(entries[0]["ts"])}</span>'
+            f'<span class="quiz-score-bar"><span style="width:100%"></span></span>'
+            f'</summary>'
+            f'<ul class="quiz-versions">{versions_html}</ul>'
+            f'</details>'
+            f'</div>'
+        )
+
+    quiz_part = "".join(cards) or '<p class="empty">Noch keine Quiz-Ergebnisse vorhanden.</p>'
+    fc_part = "".join(fc_cards) or '<p class="empty">Noch keine Flashcard-Ergebnisse vorhanden.</p>'
+    cards_html = f'<section id="quiz-section"><h2>📝 Quiz-Ergebnisse</h2>{quiz_part}</section><section id="flashcard-section"><h2>🃏 Flashcard-Ergebnisse</h2>{fc_part}</section>'
 
     detail = json.dumps(groups, ensure_ascii=False, indent=2)
 

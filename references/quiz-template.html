@@ -26,6 +26,44 @@
   .quiz-fb { margin-top: 0.6rem; font-size: 0.9rem; min-height: 1.2em; }
   .quiz-score { font-size: 1.15rem; font-weight: 600; margin-top: 1.2rem; }
   .quiz-saved { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.4rem; }
+
+  /* --- Input-Typen --- */
+  .quiz-input { width: 100%; padding: 0.7rem; font-size: 0.95rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-hover); color: var(--text); }
+  .quiz-tf { display: inline-flex; gap: 1rem; margin-bottom: 0.45rem; }
+  .quiz-tf button { flex: 1; }
+
+  /* --- Flashcard --- */
+  .fc-wrap { max-width: 640px; margin: 2rem auto; text-align: center; }
+  .fc-stage { perspective: 1000px; }
+  .fc-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 2.5rem;
+    min-height: 320px; display: flex; flex-direction: column; justify-content: center;
+    position: relative; transform-style: preserve-3d; transition: transform 0.6s;
+    cursor: pointer;
+  }
+  .fc-card.flipped { transform: rotateY(180deg); }
+  .fc-front, .fc-back {
+    position: absolute; width: 100%; height: 100%;
+    backface-visibility: hidden; display: flex; flex-direction: column; justify-content: center; align-items: center;
+  }
+  .fc-back { transform: rotateY(180deg); }
+  .fc-q { font-size: 1.5rem; font-weight: 600; color: var(--accent); }
+  .fc-a { font-size: 1.2rem; color: var(--text); margin-top: 1rem; line-height: 1.5; }
+  .fc-hint { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem; }
+  .fc-rating { display: flex; justify-content: center; gap: 0.5rem; margin-top: 1.5rem; }
+  .fc-rating button {
+    padding: 0.6rem 1.2rem; font-size: 0.95rem; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--bg-hover); color: var(--text); cursor: pointer;
+  }
+  .fc-rating button:hover { border-color: var(--accent); }
+  .fc-rating.again button:nth-child(1) { border-color: #f85149; color: #f85149; }
+  .fc-rating.hard button:nth-child(2) { border-color: #d29922; color: #d29922; }
+  .fc-rating.good button:nth-child(3) { border-color: #2fbF71; color: #2fbF71; }
+  .fc-rating.easy button:nth-child(4) { border-color: #3fb950; color: #3fb950; }
+  .fc-progress { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem; }
+  .fc-done { font-size: 1.15rem; font-weight: 600; margin-top: 1rem; }
+  .fc-avg { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.4rem; }
 </style>
 </head>
 <body class="report-body">
@@ -36,64 +74,104 @@
 <main class="report-content">
 <div class="quiz-wrap">
   <p class="quiz-progress" id="quiz-progress"></p>
-  <div id="quiz-root"></div>
-  <p class="quiz-score" id="quiz-score" hidden></p>
-  <p class="quiz-saved" id="quiz-saved"></p>
+
+  <!-- === QUIZ-MODUS (MC / TF / CLOZE / TEXT) === -->
+  <div id="quiz-mode" class="quiz-card" style="display:none">
+    <div id="quiz-root"></div>
+    <p class="quiz-score" id="quiz-score" hidden></p>
+    <p class="quiz-saved" id="quiz-saved"></p>
+  </div>
+
+  <!-- === FLASHCARD-MODUS === -->
+  <div id="flashcard-mode" class="fc-wrap" style="display:none">
+    <p class="fc-progress" id="fc-progress"></p>
+    <div class="fc-stage">
+      <div class="fc-card" id="fc-card">
+        <div class="fc-front">
+          <div class="fc-q" id="fc-q"></div>
+          <div class="fc-hint" id="fc-hint">Klicken, um die Antwort anzuzeigen</div>
+        </div>
+        <div class="fc-back">
+          <div class="fc-a" id="fc-a"></div>
+          <div class="fc-hint">Selbstbewertung (wie Anki)</div>
+        </div>
+      </div>
+    </div>
+    <div class="fc-rating" id="fc-rating" style="display:none">
+      <button onclick="fcRate(1)">1 • Wieder</button>
+      <button onclick="fcRate(2)">2 • Schwer</button>
+      <button onclick="fcRate(3)">3 • Gut</button>
+      <button onclick="fcRate(4)">4 • Leicht</button>
+    </div>
+    <p class="fc-done" id="fc-done" hidden></p>
+    <p class="fc-avg" id="fc-avg"></p>
+    <p class="quiz-saved" id="fc-saved"></p>
+  </div>
 </div>
 
 <script>
-/* Quiz-Engine: lädt /api/quiz/result automatisch, wenn ein Quiz fertig ist.
-   window.__REPORT_FILENAME__ wird vom Report-Viewer injiziert. */
-(function () {
-  "use strict";
+/* ── Konfiguration (vom Report injiziert) ────────────────────────── */
+window.__REPORT_FILENAME__ = window.__REPORT_FILENAME__ || "";
+window.__QUIZ_MODE__ = window.__QUIZ_MODE__ || "quiz";   // "quiz" | "flashcard"
 
-  var QUESTIONS = [
-    /* [FRAGE] */
-    {
-      q: "[FRAGE 1]",
-      options: ["[A]", "[B]", "[C]", "[D]"],
-      correct: 0,
-      why: "[ERKLÄRUNG warum die richtige Antwort stimmt]"
-    }
-    /* --- mehr Fragen hier einfügen --- */
-  ];
+/* ── Quiz-Fragen (Multi-Format) ──────────────────────────────────── */
+/* type: "mc" | "tf" | "cloze" | "text" */
+var QUESTIONS = [
+  { type: "mc", q: "Seit wann gilt die DSGVO für alle EU-Mitgliedstaaten?", options: ["25.05.2016", "25.05.2018", "01.01.2020", "25.05.2022"], correct: 1, why: "Die DSGVO ist seit dem 25. Mai 2018 direkt anwendbar." },
+  { type: "tf", q: "Die DSGVO gilt nur für Unternehmen mit Sitz in der EU.", correct: false, why: "Falsch — sie gilt auch für Unternehmen außerhalb der EU, wenn sie Daten von EU-Bürgern verarbeiten (Marktortprinzip)." },
+  { type: "cloze", q: "Die DSGVO sieht Bußgelder von bis zu __ Prozent des weltweiten Jahresumsatzes vor.", answer: "4", why: "Bis zu 4 % des Jahresumsatzes oder 20 Mio. Euro, je nachdem was höher ist." },
+  { type: "text", q: "Was bedeutet die Abkürzung KI im Kontext des EU AI Act?", answer: "künstliche intelligenz", why: "KI = Künstliche Intelligenz. Der AI Act reguliert KI-Systeme risikobasiert." },
+  { type: "mc", q: "Welche der folgenden ist KEINE Rechtsgrundlage für die Datenverarbeitung nach DSGVO Art. 6?", options: ["Einwilligung", "Erfüllung eines Vertrags", "Berechtigtes Interesse", "Öffentliche Bekanntmachung"], correct: 3, why: "Öffentliche Bekanntmachung ist keine Rechtsgrundlage nach Art. 6 DSGVO." },
+  { type: "tf", q: "Unter dem EU AI Act sind alle KI-Systeme verboten, die biometrische Daten verarbeiten.", correct: false, why: "Falsch — nur bestimmte Anwendungen (z. B. Echtzeit-Remote-Biometrie im öffentlichen Raum) sind verboten oder hochrisiko." },
+  { type: "cloze", q: "Der EU AI Act trat am __ in Kraft.", answer: "01.08.2024", why: "Der AI Act ist am 1. August 2024 in Kraft getreten, mit gestaffelter Anwendbarkeit." },
+  { type: "text", q: "Nenne ein Beispiel für ein hochrisiko-KI-System nach dem AI Act.", answer: "bewerbungsauswahl;kredit scoring;medizinische diagnose;grenzkontrolle", why: "Beispiele: Bewerberauswahl, Kredit-Scoring, medizinische Diagnosen, Grenzkontrolle." }
+];
 
-  var answered = 0, score = 0;
-  var answers = [];
-  var root = document.getElementById("quiz-root");
-  var prog = document.getElementById("quiz-progress");
-  var scoreEl = document.getElementById("quiz-score");
-  var savedEl = document.getElementById("quiz-saved");
+/* ── Flashcards (Front/Back + SM-2 Selbstbewertung) ──────────────── */
+var FLASHCARDS = [
+  { q: "Was ist Art. 5 DSGVO?", a: "Grundsätze für die Verarbeitung personenbezogener Daten (Rechtmäßigkeit, Transparenz, Zweckbindung, Datensparsamkeit, Richtigkeit, Speicherbegrenzung, Integrität und Vertraulichkeit, Rechenschaftspflicht)." },
+  { q: "Was ist ein 'hochriskantes KI-System' nach EU AI Act?", a: "KI-Systeme in Bereichen wie Bewerberauswahl, Kredit-Scoring, biometrische Identifizierung, kritische Infrastruktur, Bildung oder Strafverfolgung — sie unterliegen strengen Anforderungen (Risikomanagement, Datenqualität, Dokumentation, menschliche Überwachung)." },
+  { q: "Was bedeutet 'Datenminimierung'?", a: "Es dürfen nur personenbezogene Daten verarbeitet werden, die für den jeweiligen Zweck tatsächlich notwendig sind (Art. 5 Abs. 1 lit. c DSGVO)." },
+  { q: "Was ist der Unterschied zwischen 'verantwortlicher Stelle' und 'Auftragsverarbeiter'?", a: "Die verantwortliche Stelle bestimmt Zweck und Mittel der Verarbeitung allein oder gemeinsam. Der Auftragsverarbeiter verarbeitet im Auftrag der verantwortlichen Stelle (Art. 4 Nr. 7, Nr. 8 DSGVO)." },
+  { q: "Was regelt Art. 32 DSGVO?", a: "Sicherheit der Verarbeitung — technische und organisatorische Maßnahmen (TOM), z. B. Verschlüsselung, Wiederherstellbarkeit, regelmäßige Prüfung der Wirksamkeit." },
+  { q: "Was ist eine 'Datenschutz-Folgenabschätzung' (DSFA)?", a: "Eine Pflichtprüfung bei voraussichtlich hohem Risiko für die Rechte und Freiheiten natürlicher Personen (Art. 35 DSGVO), z. B. bei systematischer und umfassender Bewertung persönlicher Aspekte (Profiling)." }
+];
 
-  function updateProgress() {
-    prog.textContent = answered + " / " + QUESTIONS.length + " beantwortet";
-    if (answered === QUESTIONS.length) {
-      scoreEl.hidden = false;
-      scoreEl.textContent = "Ergebnis: " + score + " / " + QUESTIONS.length;
-      saveResult();
-    }
+/* ── Shared state ─────────────────────────────────────────────────── */
+var answered = 0, score = 0;
+var answers = [];
+var root = document.getElementById("quiz-root");
+var prog = document.getElementById("quiz-progress");
+var scoreEl = document.getElementById("quiz-score");
+var savedEl = document.getElementById("quiz-saved");
+
+/* ── SM-2 (Anki-ähnlich) ─────────────────────────────────────────── */
+/* rating: 1=Again, 2=Hard, 3=Good, 4=Easy */
+function sm2(card, rating) {
+  var ease = card.ease || 2.5;
+  var interval = card.interval || 0;
+  var reps = card.reps || 0;
+
+  if (rating < 3) {
+    interval = 1;
+    reps = 0;
+  } else {
+    reps++;
+    if (reps === 1) interval = 1;
+    else if (reps === 2) interval = 6;
+    else interval = Math.round(interval * ease);
   }
 
-  function saveResult() {
-    var payload = {
-      filename: window.__REPORT_FILENAME__ || "",
-      score: score,
-      total: QUESTIONS.length,
-      answers: answers
-    };
-    fetch("/api/quiz/result", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) {
-        savedEl.textContent = d
-          ? "✓ Ergebnis gespeichert (" + new Date(d.ts).toLocaleString("de-AT") + ")"
-          : "⚠ Ergebnis konnte nicht gespeichert werden";
-      })
-      .catch(function () { savedEl.textContent = "⚠ Ergebnis konnte nicht gespeichert werden"; });
-  }
+  ease = ease + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02));
+  if (ease < 1.3) ease = 1.3;
+
+  var next = new Date(Date.now() + interval * 86400000);
+  return { interval: interval, ease: ease, reps: reps, next: next.toISOString() };
+}
+
+/* ── Quiz Engine ─────────────────────────────────────────────────── */
+function runQuiz() {
+  document.getElementById("quiz-mode").style.display = "block";
 
   QUESTIONS.forEach(function (item, qi) {
     var card = document.createElement("div");
@@ -106,38 +184,223 @@
 
     var fb = document.createElement("div");
     fb.className = "quiz-fb";
+    var done = false;
 
-    item.options.forEach(function (opt, oi) {
-      var b = document.createElement("button");
-      b.className = "quiz-opt";
-      b.textContent = opt;
-      b.addEventListener("click", function () {
-        if (b.dataset.done) return;
-        var btns = card.querySelectorAll(".quiz-opt");
-        btns.forEach(function (x) { x.dataset.done = "1"; });
-        var ok = oi === item.correct;
+    if (item.type === "mc") {
+      item.options.forEach(function (opt, oi) {
+        var b = document.createElement("button");
+        b.className = "quiz-opt";
+        b.textContent = opt;
+        b.addEventListener("click", function () {
+          if (done) return;
+          done = true;
+          var btns = card.querySelectorAll(".quiz-opt");
+          btns.forEach(function (x) { x.dataset.done = "1"; });
+          var ok = oi === item.correct;
+          if (ok) {
+            b.classList.add("correct");
+            score++;
+            fb.textContent = "✓ Richtig. " + item.why;
+          } else {
+            b.classList.add("wrong");
+            btns[item.correct].classList.add("correct");
+            fb.textContent = "✗ Leider falsch. " + item.why;
+          }
+          answers.push({ q: item.q, type: "mc", correct: ok, chosen: oi, expected: item.correct });
+          answered++;
+          updateProgress();
+        });
+        card.appendChild(b);
+      });
+
+    } else if (item.type === "tf") {
+      ["Wahr", "Falsch"].forEach(function (label, oi) {
+        var b = document.createElement("button");
+        b.className = "quiz-opt";
+        b.textContent = label;
+        b.addEventListener("click", function () {
+          if (done) return;
+          done = true;
+          var btns = card.querySelectorAll(".quiz-opt");
+          btns.forEach(function (x) { x.dataset.done = "1"; });
+          var chosen = (oi === 0);
+          var ok = chosen === item.correct;
+          if (ok) {
+            b.classList.add("correct");
+            score++;
+            fb.textContent = "✓ Richtig. " + item.why;
+          } else {
+            b.classList.add("wrong");
+            btns[item.correct ? 0 : 1].classList.add("correct");
+            fb.textContent = "✗ Leider falsch. " + item.why;
+          }
+          answers.push({ q: item.q, type: "tf", correct: ok, chosen: chosen, expected: item.correct });
+          answered++;
+          updateProgress();
+        });
+        card.appendChild(b);
+      });
+
+    } else if (item.type === "cloze" || item.type === "text") {
+      var inp = document.createElement("input");
+      inp.className = "quiz-input";
+      inp.placeholder = item.type === "cloze" ? "Lücke eintragen …" : "Antwort eintragen …";
+      var btn = document.createElement("button");
+      btn.className = "quiz-opt";
+      btn.textContent = "Prüfen";
+      btn.addEventListener("click", function () {
+        if (done) return;
+        done = true;
+        inp.readOnly = true;
+        var chosen = inp.value.trim();
+        var expected = (item.answer || "").split(",");
+        var ok = expected.some(function (e) { return e.trim().toLowerCase() === chosen.toLowerCase(); });
         if (ok) {
-          b.classList.add("correct");
+          inp.style.borderColor = "#3fb950";
           score++;
           fb.textContent = "✓ Richtig. " + item.why;
         } else {
-          b.classList.add("wrong");
-          btns[item.correct].classList.add("correct");
-          fb.textContent = "✗ Leider falsch. " + item.why;
+          inp.style.borderColor = "#f85149";
+          fb.textContent = "✗ Leider falsch. Erwartet: " + item.answer + ". " + item.why;
         }
-        answers.push({ q: item.q, correct: ok, chosen: oi, expected: item.correct });
+        answers.push({ q: item.q, type: item.type, correct: ok, chosen: chosen, expected: item.answer });
         answered++;
         updateProgress();
       });
-      card.appendChild(b);
-    });
+      card.appendChild(inp);
+      card.appendChild(btn);
+    }
 
     card.appendChild(fb);
     root.appendChild(card);
   });
 
   updateProgress();
-})();
+}
+
+function updateProgress() {
+  if (document.getElementById("quiz-mode").style.display === "none") return;
+  prog.textContent = answered + " / " + QUESTIONS.length + " beantwortet";
+  if (answered === QUESTIONS.length) {
+    scoreEl.hidden = false;
+    scoreEl.textContent = "Ergebnis: " + score + " / " + QUESTIONS.length;
+    saveResult();
+  }
+}
+
+function saveResult() {
+  var payload = {
+    filename: window.__REPORT_FILENAME__ || "",
+    type: "quiz",
+    score: score,
+    total: QUESTIONS.length,
+    quiz_id: window.__QUIZ_ID__ || "",
+    answers: answers
+  };
+  fetch("/api/quiz/result", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      savedEl.textContent = d
+        ? "✓ Ergebnis gespeichert (" + new Date(d.ts).toLocaleString("de-AT") + ")"
+        : "⚠ Ergebnis konnte nicht gespeichert werden";
+    })
+    .catch(function () { savedEl.textContent = "⚠ Ergebnis konnte nicht gespeichert werden"; });
+}
+
+/* ── Flashcard Engine ────────────────────────────────────────────── */
+var fcIdx = 0, fcFlipped = false, fcRatings = [];
+var fcCard = document.getElementById("fc-card");
+var fcFront = fcCard.querySelector(".fc-front");
+var fcBack = fcCard.querySelector(".fc-back");
+var fcQ = document.getElementById("fc-q");
+var fcA = document.getElementById("fc-a");
+var fcHint = document.getElementById("fc-hint");
+var fcProgress = document.getElementById("fc-progress");
+var fcRating = document.getElementById("fc-rating");
+var fcDone = document.getElementById("fc-done");
+var fcAvg = document.getElementById("fc-avg");
+var fcSaved = document.getElementById("fc-saved");
+
+function runFlashcard() {
+  document.getElementById("flashcard-mode").style.display = "block";
+  showCard();
+}
+
+function showCard() {
+  if (fcIdx >= FLASHCARDS.length) {
+    finishFlashcard();
+    return;
+  }
+  var card = FLASHCARDS[fcIdx];
+  fcFlipped = false;
+  fcCard.classList.remove("flipped");
+  fcQ.textContent = card.q;
+  fcA.textContent = card.a;
+  fcHint.textContent = "Klicken, um die Antwort anzuzeigen";
+  fcRating.style.display = "none";
+  fcProgress.textContent = (fcIdx + 1) + " / " + FLASHCARDS.length;
+  fcCard.onclick = flipCard;
+}
+
+function flipCard() {
+  if (fcFlipped) return;
+  fcFlipped = true;
+  fcCard.classList.add("flipped");
+  fcHint.textContent = "Wie gut wusstest du die Antwort?";
+  fcRating.style.display = "flex";
+  fcCard.onclick = null;
+}
+
+function fcRate(rating) {
+  var card = FLASHCARDS[fcIdx];
+  var s = sm2(card, rating);
+  fcRatings.push({ q: card.q, a: card.a, rating: rating, interval: s.interval, ease: s.ease, reps: s.reps, next: s.next, ts: new Date().toISOString() });
+  fcIdx++;
+  showCard();
+}
+
+function finishFlashcard() {
+  fcCard.style.display = "none";
+  fcRating.style.display = "none";
+  fcDone.hidden = false;
+  fcDone.textContent = "Alle Karten durch!";
+  var avg = (fcRatings.reduce(function (s, r) { return s + r.rating; }, 0) / fcRatings.length).toFixed(1);
+  fcAvg.textContent = "Durchschnittliche Selbstbewertung: " + avg + " / 5";
+  saveFlashcardResult();
+}
+
+function saveFlashcardResult() {
+  var payload = {
+    filename: window.__REPORT_FILENAME__ || "",
+    type: "flashcard",
+    quiz_id: window.__QUIZ_ID__ || "",
+    cards: fcRatings,
+    avg_rating: parseFloat((fcRatings.reduce(function (s, r) { return s + r.rating; }, 0) / fcRatings.length).toFixed(2))
+  };
+  fetch("/api/quiz/result", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      fcSaved.textContent = d
+        ? "✓ Flashcard-Ergebnis gespeichert (" + new Date(d.ts).toLocaleString("de-AT") + ")"
+        : "⚠ Konnte nicht gespeichert werden";
+    })
+    .catch(function () { fcSaved.textContent = "⚠ Konnte nicht gespeichert werden"; });
+}
+
+/* ── Start ───────────────────────────────────────────────────────── */
+if (window.__QUIZ_MODE__ === "flashcard") {
+  runFlashcard();
+} else {
+  runQuiz();
+}
 </script>
 </main>
 <footer><small>Report-Viewer · Quiz</small></footer>

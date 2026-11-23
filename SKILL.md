@@ -144,6 +144,31 @@ Interactive quizzes are plain `html` reports — no extra server format needed.
 
 **Flashcards** = vereinfachte Quiz-Variante (Frage → Klick → Antwort), gleiche `quiz_id`-Versionierung.
 
+#### 4.6 Unterstützte Formate (Quiz + Flashcard)
+
+Die Vorlage `references/quiz-template.html` kennt vier Quiz-Fragetypen plus den Flashcard-Modus. Jeder Eintrag im Array `QUESTIONS` hat einen Typ `type`:
+
+| `type` | Bedeutung | Pflichtfelder | Auswertung |
+|---|---|---|---|
+| `mc` | Multiple Choice, eine richtige Option | `q`, `options` (Array), `correct` (Index), `why` | Klick auf Option |
+| `tf` | Wahr/Falsch | `q`, `correct` (`true`/`false`), `why` | Klick Wahr oder Falsch |
+| `cloze` | Lückentext, eine Antwort | `q` (mit `__` als Lücke), `answer`, `why` | Eingabe, Vergleich ohne Groß-/Kleinschreibung |
+| `text` | Freitext, mehrere akzeptierte Antworten mit `;` | `q`, `answer` (z. B. `a;b;c`), `why` | Eingabe, Treffer wenn eine Alternative passt |
+
+Der Flashcard-Modus ist **separat** und wird nicht über `QUESTIONS` gesteuert, sondern über eine eigene Datei:
+
+- `type`: flashcard (eigene HTML-Datei, z. B. `reports/flashcards-<slug>.html`)
+- Karten: Frage vorne, Antwort hinten, Klick zum Umdrehen, Selbstbewertung richtig/falsch
+- **Kein** Query-Parameter-Modus mehr (`?quiz_mode=...` ist unzuverlässig, siehe Lessons unten)
+- **Kommentar-Konflikt vermeiden:** Die Kommentar-Engine (`static/js/comments.js`) behandelt jedes Element mit der Klasse `.card` als kommentierbar und fängt dessen Klicks ab. Flashcard-Karten daher **nicht** `.card` nennen, sondern z. B. `.fc-card`.
+
+**Ergebnis-Typen** (für `/api/quiz/result`):
+- Quiz: `type: "quiz"`, Eintrag enthält `answers` mit `correct`/`chosen`/`expected` pro Frage
+- Flashcard: `type: "flashcard"`, Eintrag enthält Anzahl richtig/falsch
+
+**Referenzen für neue Quizze:** Beispiel-Quiz und Beispiel-Flashcard-Datei stehen unter `reports/` (siehe Abschnitt 7).
+
+
 # 5. Deactivation / fallback
 
 If the backend is unreachable and cannot be started:
