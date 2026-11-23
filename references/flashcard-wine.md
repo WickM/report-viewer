@@ -1,60 +1,61 @@
-# Flashcard Format Specification
+# Flashcard Creation Spec (for LLMs)
 
-This file tells an LLM how to create flashcards for the report-viewer skill. The wine example at the bottom is illustrative only. The rules apply to any topic.
+Flashcards are **HTML**, not Markdown. An LLM creates a flashcard set by filling the template `flashcard-template.html` and publishing it as `format: "html"`. The wine example at the bottom is illustrative only. The rules apply to any topic.
+
+## Workflow
+
+1. Copy `flashcard-template.html`.
+2. Replace `[TITLE]` with the set title (appears in `<title>` and `<h1>`).
+3. Replace the `CARDS` array with 5 to 15 cards (see rules below).
+4. Check the self-check list.
+5. Publish: `POST /api/publish` with `format: "html"` and the full HTML as `content`.
+
+Do not change the CSS, the markup, or the script. Only `[TITLE]` and the `CARDS` array change.
 
 ## What a flashcard is
 
-A flashcard is one question with one answer. The learner sees the question first, tries to recall the answer, then flips the card to check it, and rates it right or wrong.
+One question on the front, one answer on the back. The learner tries to recall the answer, flips the card, and rates it right or wrong.
 
-## Rules for creating cards
+## Rules for each card
 
-1. **One fact per card.** A card asks one question with one answer. Split compound questions.
-2. **Question on the front, answer on the back.** The front must be answerable from memory alone.
-3. **Short answer.** The back is 1 to 2 lines. Put extra context in the optional `note`.
-4. **Unambiguous.** A question must have exactly one correct answer. Avoid "what are the main…" without a closed list.
-5. **No yes/no questions** unless the answer needs a reason. Prefer "what / which / how".
-6. **Self-contained.** Each card must make sense alone, without the other cards.
-7. **Language.** Use the language of the topic. Keep the file itself in English.
-8. **Count.** 5 to 15 cards per set. Fewer than 5 is too thin, more than 15 overloads one session.
+1. **One fact per card.** Split compound questions.
+2. **Answerable from memory.** The question alone must be enough to try a recall.
+3. **Short answer.** 1 to 2 sentences. No lists unless the answer is a closed list.
+4. **Unambiguous.** Exactly one correct answer. No open "what are the main..." without a closed set.
+5. **Prefer what / which / how.** Avoid yes/no unless the reason is the point.
+6. **Self-contained.** No card refers to another card.
+7. **Language.** The topic's language inside the card. The spec and template stay in English.
+8. **Count.** 5 to 15 cards per set.
 
-## Required structure per card
+## Card format in the template
 
-Each card is one block with exactly these fields:
+Each entry in `CARDS` is one object with exactly two keys:
 
-```
-### <n>. <question on the front>
-**Answer:** <answer on the back>
-**Note:** <optional context, can be omitted>
+```js
+{ q: "<question>", a: "<answer>" },
 ```
 
-## Set-level header
+Escape double quotes inside the text as `\"`. Do not add fields. The template renders `q` on the front and `a` on the back.
 
-Every set starts with:
+## Set title
 
-```
-# Flashcards: <topic>
-**Date:** YYYY-MM-DD
-**Scope:** <what the set covers and what it does not>
-```
+`[TITLE]` is one line: `Flashcards: <topic>`. Include the scope if it helps, e.g. `Flashcards: EU AI Act, risk classes`.
 
-## Output to the viewer
+## Self-check before publishing
 
-The set is published as Markdown (`format: "md"`) or converted to the interactive flashcard view (`format: "html"`, see `SKILL.md` section 4.5 / 4.6). Each card must render without manual edits.
-
-## Self-check before publishing (for the LLM)
-
-Before returning a set, verify:
-- [ ] 5 to 15 cards
-- [ ] every card has a question and an answer
+- [ ] Output is a complete HTML document (not Markdown)
+- [ ] `[TITLE]` replaced in `<title>` and `<h1>`
+- [ ] 5 to 15 cards in `CARDS`
+- [ ] every card has a non-empty `q` and `a`
 - [ ] no card asks two things
-- [ ] no answer depends on another card
-- [ ] the header has date and scope
+- [ ] no leftover `[QUESTION` or `[ANSWER` placeholders
+- [ ] valid JS: no unescaped quotes inside strings
 
 ## Example (illustrative only, topic is wine)
 
-### 1. Which grape is the main variety in red Burgundy?
-**Answer:** Pinot Noir
-**Note:** Pinot Noir is the only red grape allowed in red Burgundy AOC.
-
-### 2. What does "terroir" describe?
-**Answer:** The combined influence of soil, climate and location on a wine's character.
+```js
+const CARDS = [
+  { q: "Which grape is the main variety in red Burgundy?", a: "Pinot Noir" },
+  { q: "What does \"terroir\" describe?", a: "The combined influence of soil, climate and location on a wine's character." }
+];
+```

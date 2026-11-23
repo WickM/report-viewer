@@ -9,7 +9,8 @@ Templates for recurring reports. Each template is a Markdown file with placehold
 | `weekly-status.md` | Weekly status report (Mon–Fri, traffic light, top 3) | `md` |
 | `research-summary.md` | Research summary (thesis, evidence, counter-evidence, conclusion) | `md` |
 | `architecture-decision.md` | Architecture decision (ADR format: context, decision, consequences) | `md` |
-| `flashcard-wine.md` | Flashcard format spec: how an LLM creates flashcards (any topic) | `md` |
+| `flashcard-template.html` | Interactive flashcard (flip + right/wrong). Fill `[TITLE]` and `CARDS` | `html` |
+| `flashcard-wine.md` | Spec: how an LLM creates flashcards from the template (any topic) | — |
 | `quiz-template.html` | Interactive quiz with multiple choice + automatic result saving | `html` |
 
 ## Custom template
