@@ -1,36 +1,60 @@
-# Flashcards: [Wine topic]
+# Flashcard Format Specification
 
-**Date:** [YYYY-MM-DD]
-**Scope:** [Which grapes, regions, or styles are covered]
+This file tells an LLM how to create flashcards for the report-viewer skill. The wine example at the bottom is illustrative only. The rules apply to any topic.
 
-> Usage: cover the back side, answer the question aloud, then check. Rate each card right or wrong and repeat the wrong ones.
+## What a flashcard is
 
-## Cards
+A flashcard is one question with one answer. The learner sees the question first, tries to recall the answer, then flips the card to check it, and rates it right or wrong.
 
-### 1. [Question, e.g. What is the main grape of Burgundy red wine?]
+## Rules for creating cards
 
-**Answer:** [Answer, e.g. Pinot Noir]
+1. **One fact per card.** A card asks one question with one answer. Split compound questions.
+2. **Question on the front, answer on the back.** The front must be answerable from memory alone.
+3. **Short answer.** The back is 1 to 2 lines. Put extra context in the optional `note`.
+4. **Unambiguous.** A question must have exactly one correct answer. Avoid "what are the main…" without a closed list.
+5. **No yes/no questions** unless the answer needs a reason. Prefer "what / which / how".
+6. **Self-contained.** Each card must make sense alone, without the other cards.
+7. **Language.** Use the language of the topic. Keep the file itself in English.
+8. **Count.** 5 to 15 cards per set. Fewer than 5 is too thin, more than 15 overloads one session.
 
-**Note:** [Optional context, e.g. Pinot Noir is grown in the Côte d'Or; it is the only red grape allowed in red Burgundy AOC.]
+## Required structure per card
 
-### 2. [Question]
+Each card is one block with exactly these fields:
 
-**Answer:** [Answer]
+```
+### <n>. <question on the front>
+**Answer:** <answer on the back>
+**Note:** <optional context, can be omitted>
+```
 
-**Note:** [Optional context]
+## Set-level header
 
-### 3. [Question]
+Every set starts with:
 
-**Answer:** [Answer]
+```
+# Flashcards: <topic>
+**Date:** YYYY-MM-DD
+**Scope:** <what the set covers and what it does not>
+```
 
-**Note:** [Optional context]
+## Output to the viewer
 
-## Self-check
+The set is published as Markdown (`format: "md"`) or converted to the interactive flashcard view (`format: "html"`, see `SKILL.md` section 4.5 / 4.6). Each card must render without manual edits.
 
-- [ ] Card 1 right / wrong
-- [ ] Card 2 right / wrong
-- [ ] Card 3 right / wrong
+## Self-check before publishing (for the LLM)
 
-## Sources
+Before returning a set, verify:
+- [ ] 5 to 15 cards
+- [ ] every card has a question and an answer
+- [ ] no card asks two things
+- [ ] no answer depends on another card
+- [ ] the header has date and scope
 
-1. [Source — title, URL, date]
+## Example (illustrative only, topic is wine)
+
+### 1. Which grape is the main variety in red Burgundy?
+**Answer:** Pinot Noir
+**Note:** Pinot Noir is the only red grape allowed in red Burgundy AOC.
+
+### 2. What does "terroir" describe?
+**Answer:** The combined influence of soil, climate and location on a wine's character.
