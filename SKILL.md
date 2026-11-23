@@ -42,7 +42,7 @@ if echo "$HEALTH" | grep -q '"status": "ok"'; then
   echo "Backend already running"
 else
   echo "Backend not running — starting it..."
-  cd /config/clawd/skills/report-viewer
+  cd "<skill dir>"   # das Verzeichnis, in dem dieses SKILL.md + app.py liegen
   nohup ./start.sh >/tmp/rv.log 2>&1 &
   sleep 2
   # Verify
@@ -152,7 +152,7 @@ Both formats are interactive HTML pages served by the viewer. Each one is a sing
 
 If the backend is unreachable and cannot be started:
 - Do **not** execute the skill.
-- Tell the user: "Report-Viewer backend not reachable at localhost:8765 — skill deactivation. Check `/tmp/rv.log` or run `cd /config/clawd/skills/report-viewer && ./start.sh` manually."
+- Tell the user: "Report-Viewer backend not reachable at localhost:8765 — skill deactivation. Check `/tmp/rv.log` or run `./start.sh` manually from this skill's directory."
 - Never produce fake URLs.
 
 ## 6. Smoke tests (definition of done)
@@ -165,7 +165,7 @@ If the backend is unreachable and cannot be started:
 
 ## 7. References
 
-- Viewer project (skill dir): `/config/clawd/skills/report-viewer/`
+- Viewer project (skill dir): das Verzeichnis dieses SKILL.md (deployed als `skills/report-viewer/`)
 - Similar skill: `skills/session-closeout/SKILL.md`
 - Quiz template: `references/quiz-template.html`
 - Quiz results dashboard: `/quiz-results` (live, auto-aggregiert)

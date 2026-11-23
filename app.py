@@ -41,7 +41,7 @@ COMMENTS_DIR.mkdir(exist_ok=True)
 # Default ~/.local/share/report-viewer/results, überschreibbar via REPORT_VIEWER_RESULTS_DIR.
 RESULTS_DIR = Path(os.environ.get(
     "REPORT_VIEWER_RESULTS_DIR",
-    "/media/HA_EXTERN/freigabe/projekte/report-viewer/results",
+    str(Path.home() / ".local" / "share" / "report-viewer" / "results"),
 ))
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -10,7 +10,8 @@ cd "$DIR"
 mkdir -p logs
 
 echo "🚀 Starting Report-Viewer backend on http://localhost:8765 ..."
-python3 app.py &
+PY="$(command -v python3 || command -v python)"
+"$PY" app.py &
 BACKEND_PID=$!
 
 sleep 1.5
