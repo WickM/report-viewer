@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flashcards: LLM Governance &amp; EU AI Act</title>
+<style>
+  :root { --bg:#1e1e28; --bg-card:#282832; --bg-hover:#343541; --border:#505050;
+          --text:#e0e0e0; --muted:#808080; --accent:#8abeb7; --accent-hover:#a8d4cc;
+          --ok:#b5bd68; --bad:#cc6666; --radius:6px; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text);
+         min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:24px 16px; }
+  h1 { font-size:1.3rem; margin:0 0 6px; color:var(--accent); }
+  .sub { color:var(--muted); font-size:.9rem; margin-bottom:20px; }
+  .progress { width:100%; max-width:560px; height:8px; background:var(--bg-card); border-radius:4px; overflow:hidden; margin-bottom:12px; }
+  .progress > div { height:100%; background:var(--accent); width:0%; transition:width .3s; }
+  .counter { color:var(--muted); font-size:.85rem; margin-bottom:16px; }
+  .scene { width:100%; max-width:560px; perspective:1200px; height:300px; }
+  .fc-card { position:relative; width:100%; height:100%; transition:transform .5s; transform-style:preserve-3d; cursor:pointer; }
+  .fc-card.flipped { transform:rotateY(180deg); }
+  .face { position:absolute; inset:0; backface-visibility:hidden; background:var(--bg-card);
+          border:1px solid var(--border); border-radius:var(--radius); display:flex;
+          align-items:center; justify-content:center; padding:24px; text-align:center; font-size:1.1rem; line-height:1.45; }
+  .face.back { transform:rotateY(180deg); background:var(--bg-hover); }
+  .label { position:absolute; top:10px; left:14px; font-size:.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .actions { display:flex; gap:12px; margin-top:20px; min-height:48px; }
+  button { font:inherit; padding:10px 18px; border-radius:var(--radius); border:1px solid var(--border);
+           background:var(--bg-card); color:var(--text); cursor:pointer; }
+  button:hover { background:var(--bg-hover); }
+  button.ok { border-color:var(--ok); color:var(--ok); }
+  button.bad { border-color:var(--bad); color:var(--bad); }
+  button.primary { border-color:var(--accent); color:var(--accent); }
+  button:disabled { opacity:.4; cursor:default; }
+  .hint { color:var(--muted); font-size:.85rem; margin-top:12px; }
+  .done { max-width:560px; width:100%; background:var(--bg-card); border:1px solid var(--border);
+          border-radius:var(--radius); padding:24px; text-align:center; display:none; }
+  .done .score { font-size:2rem; color:var(--accent); margin:8px 0; }
+</style>
+</head>
+<body>
+  <h1>Flashcards: LLM Governance &amp; EU AI Act</h1>
+  <div class="sub">Karte antippen zum Umdrehen, dann selbst bewerten.</div>
+  <div class="progress"><div id="bar"></div></div>
+  <div class="counter" id="counter"></div>
+
+  <div class="scene" id="scene">
+    <div class="fc-card" id="card" data-no-comment>
+      <div class="face front"><span class="label">Frage</span><span id="front"></span></div>
+      <div class="face back"><span class="label">Antwort</span><span id="back"></span></div>
+    </div>
+  </div>
+
+  <div class="actions" id="actions">
+    <button class="bad" id="btnBad" disabled>✗ Falsch</button>
+    <button class="ok" id="btnOk" disabled>✓ Richtig</button>
+  </div>
+  <div class="hint" id="hint">Tippe auf die Karte, um die Antwort zu sehen.</div>
+
+  <div class="done" id="done">
+    <div>Fertig!</div>
+    <div class="score" id="score"></div>
+    <button class="primary" id="restart">Nochmal</button>
+  </div>
+
+<script>
+const CARDS = [
+  { q: "Was verlangt Art. 9 DSGVO für besondere Kategorien personenbezogener Daten?", a: "Grundsätzliches Verarbeitungsverbot, Ausnahmen nur mit einer der Bedingungen aus Art. 9 Abs. 2 (z. B. ausdrückliche Einwilligung)." },
+  { q: "Was ist der Kern des risikobasierten Ansatzes des EU AI Act?", a: "Pflichten richten sich nach dem Risiko des KI-Systems: verboten, hochriskant, begrenztes Risiko, minimales Risiko." },
+  { q: "Welche Art KI-Systeme sind im EU AI Act verboten (Beispiele)?", a: "Z. B. Social Scoring durch Behörden und bestimmte Formen der biometrischen Echtzeit-Fernidentifizierung im öffentlichen Raum (mit engen Ausnahmen)." },
+  { q: "Was umfasst die Pflicht zur Risikomanagement-Dokumentation bei Hochrisiko-KI?", a: "Ein kontinuierlicher, dokumentierter Risikomanagementprozess über den gesamten Lebenszyklus des Systems." },
+  { q: "Was bedeutet Post-Market-Monitoring im AI Act (Art. 72)?", a: "Anbieter müssen Leistung und Risiken nach dem Inverkehrbringen laufend überwachen und dokumentieren." },
+  { q: "Was ist ISO/IEC 42001?", a: "Internationale Norm für ein Managementsystem für künstliche Intelligenz (AI Management System, AIMS)." },
+  { q: "Was ist Data Drift?", a: "Veränderung der Verteilung der Eingangsdaten gegenüber den Trainingsdaten." },
+  { q: "Was ist Concept Drift?", a: "Veränderung des Zusammenhangs zwischen Eingaben und Zielgröße, sodass ein Modell veraltet." },
+  { q: "Wofür steht Human-in-the-Loop in der KI-Governance?", a: "Menschliche Prüf- und Eingriffsmöglichkeit in Entscheidungen, insbesondere bei hohem Risiko." },
+  { q: "Was ist ein Data Contract?", a: "Vereinbarte, maschinenlesbare Spezifikation von Schema, Qualität und SLAs eines Datenprodukts zwischen Produzent und Konsument." }
+];
+
+let order = [], idx = 0, ok = 0, bad = 0, flipped = false;
+const $ = id => document.getElementById(id);
+
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+function show(){
+  const c = CARDS[order[idx]];
+  $("front").textContent = c.q;
+  $("back").textContent = c.a;
+  $("card").classList.remove("flipped");
+  flipped = false;
+  $("counter").textContent = `Karte ${idx+1} von ${CARDS.length}`;
+  $("bar").style.width = (idx/CARDS.length*100) + "%";
+  $("btnOk").disabled = true; $("btnBad").disabled = true;
+  $("hint").textContent = "Tippe auf die Karte, um die Antwort zu sehen.";
+}
+
+function flip(){
+  if(flipped) return;
+  flipped = true;
+  $("card").classList.add("flipped");
+  $("btnOk").disabled = false; $("btnBad").disabled = false;
+  $("hint").textContent = "Wie gut hast du es gewusst?";
+}
+
+function rate(correct){
+  if(!flipped) return;
+  if(correct) ok++; else bad++;
+  idx++;
+  if(idx >= CARDS.length){ finish(); return; }
+  show();
+}
+
+function finish(){
+  $("scene").style.display = "none";
+  $("actions").style.display = "none";
+  $("hint").style.display = "none";
+  $("counter").textContent = "";
+  $("bar").style.width = "100%";
+  $("done").style.display = "block";
+  const pct = Math.round(ok/CARDS.length*100);
+  $("score").textContent = `${ok} / ${CARDS.length} richtig (${pct}%)`;
+
+  // Ergebnis an den Server senden
+  const payload = {
+    filename: "flashcards-llm-governance-eu-ai-act.html",
+    quiz_id: "flashcards-llm-governance-eu-ai-act-v1",
+    type: "flashcard",
+    score: ok,
+    total: CARDS.length,
+    answers: [],
+    cards: CARDS.map((c, i) => ({ q: c.q, a: c.a, correct: i < order.length ? null : null })),
+    avg_rating: pct / 100
+  };
+  fetch("/api/quiz/result", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  }).then(r => r.json()).then(d => {
+    console.log("Flashcard-Ergebnis gespeichert:", d);
+  }).catch(e => {
+    console.warn("Flashcard-Ergebnis konnte nicht gespeichert werden:", e);
+  });
+}
+
+function restart(){
+  order = shuffle([...CARDS.keys()]);
+  idx = 0; ok = 0; bad = 0;
+  $("scene").style.display = ""; $("actions").style.display = "";
+  $("hint").style.display = ""; $("done").style.display = "none";
+  show();
+}
+
+$("card").addEventListener("click", flip);
+$("btnOk").addEventListener("click", () => rate(true));
+$("btnBad").addEventListener("click", () => rate(false));
+$("restart").addEventListener("click", restart);
+restart();
+</script>
+</body>
+</html>
