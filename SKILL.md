@@ -122,51 +122,30 @@ Give the URL to the user exactly as returned. **Never** construct URLs yourself.
 - If the backend cannot be started → refuse to run, tell the user to check `/tmp/rv.log`.
 - No Quarto, no `.qmd`, no Reveal.js — those are desktop-only.
 
-### 4.5 Quiz / Flashcard (interactive HTML)
+### 4.5 Quiz and flashcards (interactive HTML, working)
 
-Interactive quizzes are plain `html` reports — no extra server format needed.
+Both formats are interactive HTML pages served by the viewer. Each one is a single self-contained file in `reports/`.
 
-1. **Template:** `references/quiz-template.html` (in this skill's `references/`).
-2. **Fill placeholders:** `[TITEL]`, `[FRAGE]`, `[A]`–`[D]`, `[ERKLÄRUNG]`, `correct: <index>`, `why`.
-3. **Versionierung (wichtig):** Quiz-Updates bekommen eine neue `quiz_id` mit Suffix `-v1`, `-v2`, `-v3`...
-   - Erstes Quiz: `quiz_id = "quiz-<slug>-v1"` (z.B. `quiz-llm-governance-eu-ai-act-v1`)
-   - Update mit neuen Fragen: `quiz_id = "quiz-<slug>-v2"` (neue HTML-Datei, alte Ergebnisse bleiben erhalten)
-   - So bleiben alte und neue Quiz-Versuche **sauber getrennt auswertbar** (`/quiz-results` gruppiert nach Quiz + Version).
-4. **Publish:**
-   ```bash
-   curl -s -X POST http://localhost:8765/api/publish \
-     -H "Content-Type: application/json" \
-     -d '{"title":"<Titel>","format":"html","content":"<fully rendered HTML>"}'
-   ```
-5. **Ergebnisse speichern:** Die Quiz-Engine im Template postet automatisch beim Abschluss an `/api/quiz/result` mit `quiz_id`. Gespeichert in `RESULTS_DIR` (CIFS, persistent).
-6. **Ergebnisse anzeigen:** `/quiz-results` (Dashboard) zeigt alle Quiz-Versuche, gruppiert nach Quiz + Version.
-7. **Vor dem Publizieren:** `node --check` auf das extrahierte `<script>`-JS machen (Syntaxfehler → Quiz zeigt nichts).
+**Working examples (verified, HTTP 200):**
+- Quiz, all four question types: `http://192.168.0.6:8765/view/quiz-beispiel-alle-formate-v1.html`
+- Flashcards (flip card, right/wrong): `http://192.168.0.6:8765/view/flashcards-llm-governance-eu-ai-act.html`
 
-**Flashcards** = vereinfachte Quiz-Variante (Frage → Klick → Antwort), gleiche `quiz_id`-Versionierung.
+**Quiz question types** (array `QUESTIONS` in `references/quiz-template.html`):
 
-#### 4.6 Unterstützte Formate (Quiz + Flashcard)
+| `type` | Fields | Evaluation |
+|---|---|---|
+| `mc` | `q`, `options`, `correct` (index), `why` | click an option |
+| `tf` | `q`, `correct` (true/false), `why` | click true or false |
+| `cloze` | `q` (with `__` as gap), `answer`, `why` | typed input, compared case-insensitively |
+| `text` | `q`, `answer` (alternatives separated by `;`), `why` | typed input, matches if any alternative fits |
 
-Die Vorlage `references/quiz-template.html` kennt vier Quiz-Fragetypen plus den Flashcard-Modus. Jeder Eintrag im Array `QUESTIONS` hat einen Typ `type`:
+**Flashcards** (array `CARDS` in the flashcard page): each card is `{ q, a }`. The card shows `q` on the front, the learner flips it, then rates `a` right or wrong.
 
-| `type` | Bedeutung | Pflichtfelder | Auswertung |
-|---|---|---|---|
-| `mc` | Multiple Choice, eine richtige Option | `q`, `options` (Array), `correct` (Index), `why` | Klick auf Option |
-| `tf` | Wahr/Falsch | `q`, `correct` (`true`/`false`), `why` | Klick Wahr oder Falsch |
-| `cloze` | Lückentext, eine Antwort | `q` (mit `__` als Lücke), `answer`, `why` | Eingabe, Vergleich ohne Groß-/Kleinschreibung |
-| `text` | Freitext, mehrere akzeptierte Antworten mit `;` | `q`, `answer` (z. B. `a;b;c`), `why` | Eingabe, Treffer wenn eine Alternative passt |
+**Creating a new page:** copy the working file as a base, replace the question or card array and the title, then publish it with `POST /api/publish`, `format: "html"`, `content` = full HTML.
 
-Der Flashcard-Modus ist **separat** und wird nicht über `QUESTIONS` gesteuert, sondern über eine eigene Datei:
+**Comment widget caveat:** the comment engine treats elements with the class `.card` as commentable and intercepts their clicks. The flashcard uses `.fc-card` for this reason. Do not name interactive elements `.card`.
 
-- `type`: flashcard (eigene HTML-Datei, z. B. `reports/flashcards-<slug>.html`)
-- Karten: Frage vorne, Antwort hinten, Klick zum Umdrehen, Selbstbewertung richtig/falsch
-- **Kein** Query-Parameter-Modus mehr (`?quiz_mode=...` ist unzuverlässig, siehe Lessons unten)
-- **Kommentar-Konflikt vermeiden:** Die Kommentar-Engine (`static/js/comments.js`) behandelt jedes Element mit der Klasse `.card` als kommentierbar und fängt dessen Klicks ab. Flashcard-Karten daher **nicht** `.card` nennen, sondern z. B. `.fc-card`.
-
-**Ergebnis-Typen** (für `/api/quiz/result`):
-- Quiz: `type: "quiz"`, Eintrag enthält `answers` mit `correct`/`chosen`/`expected` pro Frage
-- Flashcard: `type: "flashcard"`, Eintrag enthält Anzahl richtig/falsch
-
-**Referenzen für neue Quizze:** Beispiel-Quiz und Beispiel-Flashcard-Datei stehen unter `reports/` (siehe Abschnitt 7).
+**Result storage:** the quiz posts its result to `/api/quiz/result` on completion, shown at `/quiz-results`. The flashcard page does not post results yet.
 
 
 # 5. Deactivation / fallback
