@@ -114,7 +114,65 @@
         }
       }, { passive: true });
       card.addEventListener("touchcancel", function () { clearTimeout(pressTimer); });
+
+      /* Sichtbarer ⋮-Button → Kontextmenü (entdeckbar, ohne Geste) */
+      var actBtn = card.querySelector(".card-actions");
+      if (actBtn) actBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var r = actBtn.getBoundingClientRect();
+        showContext(r.left, r.bottom + 4, filename);
+      });
     });
+
+    /* Rel. Zeitstempel ("vor 2 Min.") — einmal + alle 60s */
+    function relTime(ts) {
+      var t = new Date(ts).getTime();
+      if (isNaN(t)) return "";
+      var s = Math.floor((Date.now() - t) / 1000);
+      if (s < 60) return "gerade eben";
+      var m = Math.floor(s / 60);
+      if (m < 60) return "vor " + m + " Min.";
+      var h = Math.floor(m / 60);
+      if (h < 24) return "vor " + h + " Std.";
+      var d = Math.floor(h / 24);
+      return "vor " + d + " Tag" + (d > 1 ? "en" : "");
+    }
+    function refreshTimes() {
+      document.querySelectorAll(".card-when[data-mtime]").forEach(function (el) {
+        el.textContent = relTime(el.dataset.mtime) || el.textContent;
+        el.title = el.dataset.mtime;
+      });
+    }
+    refreshTimes();
+    setInterval(refreshTimes, 60000);
+
+    /* Suche / Filter / Sortierung */
+    var grid = document.querySelector(".reports-grid");
+    var searchEl = document.getElementById("tb-search");
+    var filterEl = document.getElementById("tb-filter");
+    var sortEl = document.getElementById("tb-sort");
+    function applyToolbar() {
+      if (!grid) return;
+      var q = (searchEl && searchEl.value || "").toLowerCase();
+      var fmt = filterEl ? filterEl.value : "alle";
+      var sort = sortEl ? sortEl.value : "neueste";
+      var cards = Array.prototype.slice.call(grid.querySelectorAll(".card[data-filename]"));
+      cards.forEach(function (c) {
+        var okFmt = fmt === "alle" || c.dataset.format === fmt;
+        var okQ = !q || (c.dataset.title || "").toLowerCase().indexOf(q) !== -1
+                     || (c.dataset.filename || "").toLowerCase().indexOf(q) !== -1;
+        c.style.display = (okFmt && okQ) ? "" : "none";
+      });
+      cards.sort(function (a, b) {
+        if (sort === "name") return (a.dataset.title || "").localeCompare(b.dataset.title || "");
+        return (b.dataset.mtime || "").localeCompare(a.dataset.mtime || "");
+      });
+      cards.forEach(function (c) { grid.appendChild(c); });
+    }
+    if (searchEl) searchEl.addEventListener("input", applyToolbar);
+    if (filterEl) filterEl.addEventListener("change", applyToolbar);
+    if (sortEl) sortEl.addEventListener("change", applyToolbar);
+    applyToolbar();
 
     /* Schließen bei Klick außerhalb */
     document.addEventListener("click", function (e) {

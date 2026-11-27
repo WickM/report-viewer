@@ -20,11 +20,14 @@ from markdown_it import MarkdownIt
 # ---------------------------------------------------------------------------
 
 BASE_DIR = Path(__file__).parent
-REPORTS_DIR = BASE_DIR / "reports"
+# Data root: user-level, project-independent. Reports/comments live here, not
+# inside the skill/code dir - portable across projects and agent copies.
+DATA_DIR = Path.home() / ".report_viewer"
+REPORTS_DIR = DATA_DIR / "reports"
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
 
-REPORTS_DIR.mkdir(exist_ok=True)
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 HOST = os.environ.get("REPORT_VIEWER_HOST", "0.0.0.0")
 PORT = int(os.environ.get("REPORT_VIEWER_PORT", "8765"))
@@ -34,8 +37,8 @@ BASE_URL = os.environ.get("REPORT_VIEWER_BASE_URL", f"http://localhost:{PORT}")
 # Comment storage (JSON files — CIFS doesn't support SQLite locking)
 # ---------------------------------------------------------------------------
 
-COMMENTS_DIR = BASE_DIR / ".comments"
-COMMENTS_DIR.mkdir(exist_ok=True)
+COMMENTS_DIR = DATA_DIR / "comments"
+COMMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Quiz-Ergebnisse: persistent, außerhalb des Entwicklungsordners.
 # Default ~/.local/share/report-viewer/results, überschreibbar via REPORT_VIEWER_RESULTS_DIR.
@@ -44,6 +47,62 @@ RESULTS_DIR = Path(os.environ.get(
     str(Path.home() / ".local" / "share" / "report-viewer" / "results"),
 ))
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Report-Metadaten (lesbarer Titel + Format) pro Filename — Sidecar, da der
+# publizierte Report ein gefrorenes HTML ist und den Titel sonst nur im <title> trägt.
+META_PATH = REPORTS_DIR / "_meta.json"
+
+def _load_meta() -> dict:
+    if not META_PATH.exists():
+        return {}
+    try:
+        return json.loads(META_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+def _save_meta(meta: dict) -> None:
+    META_PATH.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+def _detect_format(html: str) -> str:
+    """Format aus dem gepublizierten HTML raten (nur für Backfill)."""
+    if "excalidraw-app" in html:
+        return "excalidraw"
+    if "var QUESTIONS" in html or "quiz-card" in html:
+        return "quiz"
+    if 'class="fc-card"' in html or "fc-scene" in html:
+        return "flashcard"
+    # MD-Reports tragen die KaTeX/Mermaid-Libs + report-content-Wrapping.
+    if "katex" in html.lower() and "report-content" in html:
+        return "md"
+    return "html"
+
+def _backfill_meta() -> dict:
+    """Meta für Reports ohne Eintrag nachtragen: Titel aus <title>, Format erkannt."""
+    meta = _load_meta()
+    changed = False
+    for f in REPORTS_DIR.glob("*.html"):
+        if f.name in meta:
+            # Format neu bestimmen, falls sich die Erkennung geändert hat (Titel behalten)
+            try:
+                new_fmt = _detect_format(f.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if meta[f.name].get("format") != new_fmt:
+                meta[f.name]["format"] = new_fmt
+                changed = True
+            continue
+        try:
+            html = f.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        m = re.search(r"<title>(.*?)</title>", html, re.DOTALL)
+        title = m.group(1).strip() if m else f.stem
+        meta[f.name] = {"title": title, "format": _detect_format(html),
+                        "created": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(f.stat().st_mtime))}
+        changed = True
+    if changed:
+        _save_meta(meta)
+    return meta
 
 def _safe_name(filename: str) -> str:
     """Map filename -> safe JSON path inside .comments/."""
@@ -62,7 +121,7 @@ def _save_comments(filename: str, comments: list) -> None:
     fp = COMMENTS_DIR / _safe_name(filename)
     fp.write_text(json.dumps(comments, ensure_ascii=False), encoding="utf-8")
 
-def _add_comment(filename: str, author: str, text: str, quote: str = "") -> dict:
+def _add_comment(filename: str, author: str, text: str, quote: str = "", card_ref=None, excal_id=None) -> dict:
     comments = _load_comments(filename)
     entry = {
         "id": int(time.time() * 1000),
@@ -72,6 +131,10 @@ def _add_comment(filename: str, author: str, text: str, quote: str = "") -> dict
         "quote": quote,
         "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
+    if card_ref is not None:
+        entry["card_ref"] = card_ref
+    if excal_id:
+        entry["excal_id"] = excal_id
     comments.append(entry)
     _save_comments(filename, comments)
     return entry
@@ -231,7 +294,9 @@ def api_comments_add():
     if not filename or not text:
         return jsonify({"error": "filename and text required"}), 400
     quote = (data.get("quote") or "").strip()
-    entry = _add_comment(filename, author, text, quote)
+    card_ref = data.get("card_ref")
+    excal_id = (data.get("excal_id") or "").strip() or None
+    entry = _add_comment(filename, author, text, quote, card_ref, excal_id)
     return jsonify(entry), 201
 
 
@@ -327,8 +392,46 @@ def api_report_delete(filename):
     comment_fp = COMMENTS_DIR / _safe_name(safe)
     if comment_fp.exists():
         comment_fp.unlink()
+    excal_fp = REPORTS_DIR / (safe + ".excalidraw.json")
+    if excal_fp.exists():
+        excal_fp.unlink()
+    meta = _load_meta()
+    if safe in meta:
+        del meta[safe]
+        _save_meta(meta)
     log.info(f"Deleted report: {safe}")
     return jsonify({"deleted": safe})
+
+
+def _excalidraw_save_path(filename: str) -> Path:
+    """Sidecar for Excalidraw autosave, keyed by report filename."""
+    safe = os.path.basename(filename)
+    return REPORTS_DIR / (safe + ".excalidraw.json")
+
+
+@app.route("/api/reports/<filename>/excalidraw", methods=["GET"])
+def api_excalidraw_load(filename):
+    """Load the autosaved Excalidraw scene for a report (if any)."""
+    fp = _excalidraw_save_path(filename)
+    if not fp.exists():
+        return jsonify({"saved": False})
+    try:
+        data = json.loads(fp.read_text(encoding="utf-8"))
+        return jsonify({"saved": True, "data": data})
+    except Exception:
+        return jsonify({"saved": False})
+
+
+@app.route("/api/reports/<filename>/excalidraw", methods=["POST"])
+def api_excalidraw_save(filename):
+    """Autosave the current Excalidraw scene (debounced from the client).
+    Accepts whatever the bundle's onChange passes (object or array)."""
+    data = request.get_json(force=True)
+    if data is None:
+        return jsonify({"error": "invalid payload"}), 400
+    fp = _excalidraw_save_path(filename)
+    fp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return jsonify({"saved": True, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")})
 
 
 # ---------------------------------------------------------------------------
@@ -338,30 +441,41 @@ def api_report_delete(filename):
 @app.route("/")
 def index():
     """Dashboard — list all reports."""
+    meta = _backfill_meta()
     reports = []
     for f in sorted(REPORTS_DIR.glob("*.html"), key=lambda p: p.stat().st_mtime, reverse=True):
         stat = f.stat()
+        m = meta.get(f.name, {})
         reports.append({
             "filename": f.name,
-            "title": f.stem,
+            "title": m.get("title", f.stem),
+            "format": m.get("format", _detect_format(f.read_text(encoding="utf-8"))),
             "size": stat.st_size,
-            "modified": time.strftime("%Y-%m-%d %H:%M", time.localtime(stat.st_mtime)),
+            "modified": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(stat.st_mtime)),
         })
     return _render_index(reports)
 
 
+def _fmt_badge(fmt: str) -> str:
+    labels = {"md": "MD", "html": "HTML", "excalidraw": "EXCALIDRAW", "quiz": "QUIZ", "flashcard": "FLASHCARD"}
+    label = labels.get(fmt, fmt.upper())
+    return f'<span class="card-fmt-badge fmt-{fmt}">{label}</span>'
+
 def _render_index(reports):
     """Render index page inline."""
     cards = "".join(
-        f'<div class="card" data-filename="{r["filename"]}" tabindex="0">'
-        f'<span class="card-title">{r["title"]}</span>'
-        f'<span class="card-meta">{r["modified"]} · {r["size"] // 1024} KB</span>'
+        f'<div class="card" data-filename="{r["filename"]}" data-format="{r["format"]}" data-mtime="{r["modified"]}" data-title="{r["title"]}" tabindex="0">'
+        f'<button class="card-actions" data-filename="{r["filename"]}" aria-label="Aktionen">⋮</button>'
+        f'<div class="card-head">{_fmt_badge(r["format"])}</div>'
+        f'<span class="card-title-read" title="{r["filename"]}">{r["title"]}</span>'
+        f'<span class="card-title-slug">{r["filename"]}</span>'
+        f'<span class="card-meta"><span class="card-when" data-mtime="{r["modified"]}">{r["modified"][:16].replace("T", " ")}</span> · {r["size"] // 1024} KB</span>'
         f'<span class="card-hint">Langer Klick (500ms) oder Rechtsklick für Aktionen</span>'
         f'</div>'
         for r in reports
     ) or '<p class="empty">Noch keine Reports vorhanden.</p>'
     html = f"""<!DOCTYPE html>
-<html lang="de">
+<html lang="de" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -373,11 +487,27 @@ def _render_index(reports):
 <header>
   <h1>📄 Report-Viewer</h1>
   <nav>
-    <a href="/">Übersicht</a>
+    <a href="/" class="active">Übersicht</a>
     <a href="/quiz-results">📊 Quiz-Ergebnisse</a>
   </nav>
 </header>
 <main>
+  <section class="toolbar">
+    <input id="tb-search" type="search" placeholder="Suche (Titel / Filename) …" aria-label="Suche">
+    <select id="tb-filter" aria-label="Typ-Filter">
+      <option value="alle">Alle</option>
+      <option value="md">Report (MD)</option>
+      <option value="html">HTML</option>
+      <option value="excalidraw">Excalidraw</option>
+      <option value="quiz">Quiz</option>
+      <option value="flashcard">Flashcard</option>
+    </select>
+    <select id="tb-sort" aria-label="Sortierung">
+      <option value="neueste">Neueste zuerst</option>
+      <option value="name">Name (A–Z)</option>
+    </select>
+    <span class="toolbar-note">Tipps: ⋮-Button, Long-Press (500ms) oder Rechtsklick für Aktionen.</span>
+  </section>
   <section id="comments-panel" class="comments-panel" hidden>
     <div class="comments-header">
       <h2 id="comments-title">Kommentare</h2>
@@ -468,7 +598,7 @@ def api_publish():
     if fmt == "md":
         body_html = render_markdown(raw)
         html = f"""<!DOCTYPE html>
-<html lang="de">
+<html lang="de" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -506,12 +636,20 @@ def api_publish():
 </html>"""
     elif fmt == "html":
         html = raw
+    elif fmt == "flashcard":
+        # Flashcard-Deck als fertiges HTML (Template) — wie "html" durchreichen,
+        # aber Format "flashcard" für das Badge speichern.
+        html = raw
     elif fmt == "excalidraw":
         html = _wrap_excalidraw(title, raw)
     else:
         return jsonify({"error": f"Unknown format: {fmt}. Supported: md, html, excalidraw"}), 400
 
     filepath.write_text(html, encoding="utf-8")
+    meta = _load_meta()
+    meta[filename] = {"title": title, "format": fmt,
+                      "created": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    _save_meta(meta)
     url = f"{BASE_URL}/view/{filename}"
     log.info(f"Published: {filename} ({len(html)} bytes, created={created})")
     return jsonify({"filename": filename, "url": url, "created": created})
@@ -520,11 +658,15 @@ def api_publish():
 @app.route("/api/reports", methods=["GET"])
 def api_reports():
     """List all published reports."""
+    meta = _load_meta()
     reports = []
     for f in sorted(REPORTS_DIR.glob("*.html"), key=lambda p: p.stat().st_mtime, reverse=True):
         stat = f.stat()
+        m = meta.get(f.name, {})
         reports.append({
             "filename": f.name,
+            "title": m.get("title", f.stem),
+            "format": m.get("format", "html"),
             "size": stat.st_size,
             "modified": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(stat.st_mtime)),
         })
@@ -575,7 +717,7 @@ def _wrap_excalidraw(title: str, raw_json: str) -> str:
         )
 
     return f"""<!DOCTYPE html>
-<html lang="de">
+<html lang="de" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -583,13 +725,13 @@ def _wrap_excalidraw(title: str, raw_json: str) -> str:
 <link rel="stylesheet" href="/static/css/style.css">
 <style>
   html, body {{ margin:0; padding:0; }}
-  body.report-body {{ height:100vh; display:flex; flex-direction:column; background:#1e1e28; color:#e0e0e0; }}
+  body.report-body {{ height:100vh; display:flex; flex-direction:column; background:var(--bg); color:var(--text); }}
   #excalidraw-app {{ flex:1; min-height:0; position:relative; }}
-  body.report-body header {{ flex:0 0 auto; display:flex; align-items:center; gap:1.5rem; padding:1rem 2rem; background:#282832; border-bottom:1px solid #505050; }}
+  body.report-body header {{ flex:0 0 auto; display:flex; align-items:center; gap:1.5rem; padding:1rem 2rem; background:var(--bg-card); border-bottom:1px solid var(--border); }}
   body.report-body header h1 {{ font-size:1.2rem; margin:0; }}
-  body.report-body header a {{ color:#808080; text-decoration:none; }}
-  body.report-body header a:hover {{ color:#a8d4cc; }}
-  #loading {{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:1.1rem; color:#808080; }}
+  body.report-body header a {{ color:var(--text-muted); text-decoration:none; }}
+  body.report-body header a:hover {{ color:var(--accent-hover); }}
+  #loading {{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:1.1rem; color:var(--text-muted); }}
 </style>
 {bundle_tag}
 </head>
@@ -626,25 +768,97 @@ def _wrap_excalidraw(title: str, raw_json: str) -> str:
       return;
     }}
 
-    try {{
-      var initialData = JSON.parse({json.dumps(raw_json)});
-      var container = document.getElementById("excalidraw-app");
-      container.innerHTML = "";
-      createRoot(container).render(
-        React.createElement(Excalidraw, {{
-          initialData: initialData,
-          viewModeEnabled: false,
-          zenModeEnabled: true,
-          gridModeEnabled: false,
-          UIOptions: {{ canvasActions: {{ export: {{ saveFileToDisk: true }} }} }}
-        }})
-      );
-      if (loading && loading.parentNode) {{
-        loading.parentNode.removeChild(loading);
-      }}
-    }} catch (err) {{
-      fail(String((err && err.message) || err));
+    var saveTimer = null;
+    var saveStatus = null;
+    var excalApi = null;
+
+    var lastElements = null;
+
+    /* Objekt-Liste für den Kommentar-Dropdown (id + lesbares Label).
+       Nutzt das Element-Array aus onChange (zuverlässig in diesem Bundle). */
+    function publishObjects(els) {{
+      if (els) lastElements = els;
+      var list = [];
+      var arr = lastElements || [];
+      if (arr && !Array.isArray(arr) && arr.elements) arr = arr.elements;
+      arr.forEach(function (el, i) {{
+        if (!el || el.isDeleted) return;
+        var label;
+        if (el.type === "text" && el.text) {{
+          label = "Text: " + el.text.replace(/\\n/g, " ").slice(0, 40);
+        }} else {{
+          var t = el.type || "Objekt";
+          label = t.charAt(0).toUpperCase() + t.slice(1) + " #" + (i + 1);
+        }}
+        list.push({{ id: el.id, label: label }});
+      }});
+      window.__EXCAL_OBJECTS__ = list;
+      document.dispatchEvent(new CustomEvent("excal:objects", {{ detail: list }}));
     }}
+
+    function showStatus(msg) {{
+      if (!saveStatus) {{
+        saveStatus = document.createElement("div");
+        saveStatus.id = "excal-status";
+        saveStatus.style.cssText = "position:fixed;top:8px;right:16px;z-index:10000;font-size:0.8rem;padding:4px 10px;border-radius:6px;background:rgba(40,40,50,0.9);color:#aaa;";
+        document.body.appendChild(saveStatus);
+      }}
+      saveStatus.textContent = msg;
+    }}
+
+    function scheduleSave(state) {{
+      if (saveTimer) clearTimeout(saveTimer);
+      showStatus("…");
+      saveTimer = setTimeout(function () {{
+        fetch("/api/reports/" + encodeURIComponent(window.__REPORT_FILENAME__ || "") + "/excalidraw", {{
+          method: "POST",
+          headers: {{"Content-Type": "application/json"}},
+          body: JSON.stringify(state)
+        }}).then(function (r) {{
+          showStatus(r.ok ? "✓" : "⚠");
+          setTimeout(function () {{ if (saveStatus) saveStatus.textContent = ""; }}, 1200);
+        }}).catch(function () {{ showStatus("⚠"); }});
+      }}, 800);
+    }}
+
+    /* Lade gespeicherten Stand; sonst Original aus dem Report.
+       setTimeout(0): __REPORT_FILENAME__ wird nach diesem Skript injiziert,
+       daher erst in der nächsten Event-Loop-Runde holen. */
+    setTimeout(function () {{
+    fetch("/api/reports/" + encodeURIComponent(window.__REPORT_FILENAME__ || "") + "/excalidraw")
+      .then(function (r) {{ return r.json(); }})
+      .then(function (res) {{
+        var orig = JSON.parse({json.dumps(raw_json)});
+        var initialData = orig;
+        if (res && res.saved && res.data) {{
+          /* onChange liefert in diesem Bundle das Element-Array – zu initialData
+             ({{elements, appState, files}}) normalisieren, sonst wie gespeichert. */
+          if (Array.isArray(res.data)) {{
+            initialData = {{ elements: res.data, appState: orig.appState || {{}} , files: orig.files || {{}} }};
+          }} else {{
+            initialData = res.data;
+          }}
+        }}
+        var container = document.getElementById("excalidraw-app");
+        container.innerHTML = "";
+        createRoot(container).render(
+          React.createElement(Excalidraw, {{
+            initialData: initialData,
+            viewModeEnabled: false,
+            zenModeEnabled: true,
+            gridModeEnabled: false,
+            excalidrawAPI: function (api) {{ excalApi = api; }},
+            onChange: function (state) {{ scheduleSave(state); publishObjects(state); }},
+            UIOptions: {{ canvasActions: {{ export: {{ saveFileToDisk: true }} }} }}
+          }})
+        );
+        publishObjects(initialData.elements || (Array.isArray(initialData) ? initialData : []));
+        if (loading && loading.parentNode) {{
+          loading.parentNode.removeChild(loading);
+        }}
+      }})
+      .catch(function (err) {{ fail(String((err && err.message) || err)); }});
+    }}, 0);
   }})();
 </script>
 </body>
@@ -830,7 +1044,7 @@ def quiz_results_page():
     detail = json.dumps(groups, ensure_ascii=False, indent=2)
 
     html = f"""<!DOCTYPE html>
-<html lang="de">
+<html lang="de" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

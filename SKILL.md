@@ -1,9 +1,16 @@
 ---
 name: report-viewer
 description: Publish and iterate on browser-viewable reports (Markdown with Mermaid/KaTeX, HTML dashboards, Excalidraw boards) via the local report-viewer REST API. Use whenever a structured visual report, dashboard or diagram should be created or revised and a browser comment-loop is wanted. Not for plain chat answers, not for desktop-only features (Quarto/qmd, Reveal.js).
+keywords:
+  - "Report veröffentlichen"
+  - "Report-Viewer"
+  - "Report kommentieren"
+  - "Quiz erstellen"
+  - "Excalidraw Board"
 user-invocable: true
 disable-model-invocation: false
-version: 1.0.0
+metadata:
+  version: "1.1.0"
 author: WickM
 license: Apache-2.0
 homepage: https://github.com/WickM/report-viewer
@@ -92,7 +99,7 @@ Give the URL to the user exactly as returned. **Never** construct URLs yourself.
    ```bash
    curl -s "http://localhost:8765/api/comments?filename=<filename>"
    ```
-   Returns an array of comments: `id`, `author`, `text`, `quote`, `created`, optionally `resolved`.
+   Returns an array of comments: `id`, `author`, `text`, `quote`, `created`, optionally `resolved`, plus contextual anchors: `card_ref` (int, flashcard — index of the card) and `excal_id` (string, Excalidraw — the element id the comment is tied to).
 
 2. **Update the source:**
    - With `source_path`: patch the original file (e.g. the brain vault `.md`) so the working copy stays in sync.
@@ -127,8 +134,8 @@ Give the URL to the user exactly as returned. **Never** construct URLs yourself.
 Both formats are interactive HTML pages served by the viewer. Each one is a single self-contained file in `reports/`.
 
 **Working examples (verified, HTTP 200):**
-- Quiz, all four question types: `http://192.168.0.6:8765/view/quiz-beispiel-alle-formate-v1.html`
-- Flashcards (flip card, right/wrong): `http://192.168.0.6:8765/view/flashcards-llm-governance-eu-ai-act.html`
+- Quiz, all four question types: `http://localhost:8765/view/quiz-beispiel-alle-formate-v1.html`
+- Flashcards (flip card, right/wrong): `http://localhost:8765/view/flashcards-llm-governance-eu-ai-act.html`
 
 **Quiz question types** (array `QUESTIONS` in `references/quiz-template.html`):
 
@@ -139,14 +146,32 @@ Both formats are interactive HTML pages served by the viewer. Each one is a sing
 | `cloze` | `q` (with `__` as gap), `answer`, `why` | typed input, compared case-insensitively |
 | `text` | `q`, `answer` (alternatives separated by `;`), `why` | typed input, matches if any alternative fits |
 
-**Flashcards** (array `CARDS` in the flashcard page): each card is `{ q, a }`. The card shows `q` on the front, the learner flips it, then rates `a` right or wrong.
+**Flashcards** — two templates:
+- `references/flashcard-template.html` (standalone, `CARDS = [{q, a}]`): flip card, self-rate right/wrong. Posts `type:"flashcard"` with `score`/`total` on completion.
+- The flashcard engine inside `references/quiz-template.html` (SM-2 spaced repetition, 1–5 rating, `FLASHCARDS` array): posts `type:"flashcard"` with per-card `cards` + `avg_rating`.
+
+Use the standalone template for simple right/wrong decks; use the quiz template's flashcard mode when you want SM-2 intervals.
 
 **Creating a new page:** copy the working file as a base, replace the question or card array and the title, then publish it with `POST /api/publish`, `format: "html"`, `content` = full HTML.
 
 **Comment widget caveat:** the comment engine treats elements with the class `.card` as commentable and intercepts their clicks. The flashcard uses `.fc-card` for this reason. Do not name interactive elements `.card`.
 
-**Result storage:** the quiz posts its result to `/api/quiz/result` on completion, shown at `/quiz-results`. The flashcard page does not post results yet.
+**Result storage:** the quiz posts its result to `/api/quiz/result` on completion, shown at `/quiz-results`. Both flashcard templates also post results (`type:"flashcard"`) on completion — the standalone one sends `score`/`total`, the quiz-template one sends per-card `cards` + `avg_rating`. All appear under the Flashcard section of `/quiz-results`.
 
+### 4.6 Excalidraw (autosave + object comments)
+
+- **Autosave:** edits on an Excalidraw board persist automatically. The client debounces (800 ms) and POSTs the scene to `POST /api/reports/<filename>/excalidraw`; on load the viewer fetches `GET /api/reports/<filename>/excalidraw` and restores the saved scene if present (else the original from the report). The scene is stored in a sidecar `<filename>.excalidraw.json` next to the report; deleting the report also deletes the sidecar.
+- **Object comments:** the 💬 comment panel on an Excalidraw page has an object dropdown. Picking an object tags the comment with `excal_id` (the element id), shown in the list as `· Objekt: <label>`. Text elements are labeled by their content; other shapes by type + index.
+
+### 4.7 Theming (change the look on a user's behalf)
+
+The UI is themed via CSS custom properties in the `:root` block of `static/css/style.css`
+(14 variables: `--bg`, `--bg-card`, `--bg-hover`, `--border`, `--text`, `--text-muted`,
+`--accent`, `--accent-hover`, `--radius`, `--font-sans`, `--font-mono`, `--success`,
+`--error`, `--warning`). To re-theme: pick new values, edit only those values in the
+`:root` block, sync the file (no restart; browser hard-reload), verify legibility.
+Full variable map + light-theme worked example + caveats (frozen reports / inline
+styles / Chart.js / Excalidraw wrapper keep hardcoded colors) → `references/theming.md`.
 
 # 5. Deactivation / fallback
 
@@ -169,3 +194,4 @@ If the backend is unreachable and cannot be started:
 - Similar skill: `skills/session-closeout/SKILL.md`
 - Quiz template: `references/quiz-template.html`
 - Quiz results dashboard: `/quiz-results` (live, auto-aggregiert)
+- Theming guide: `references/theming.md` (CSS-variable palette, light-theme example, caveats)

@@ -23,8 +23,39 @@
       '  <span class="clp-count" id="clp-count"></span>' +
       '  <button id="clp-close" class="clp-close" aria-label="Schließen">✕</button>' +
       '</div>' +
-      '<div id="clp-list" class="clp-list"></div>';
+      '<div id="clp-list" class="clp-list"></div>' +
+      '<div id="clp-composer" class="clp-composer" hidden>' +
+      '  <select id="clp-object" class="clp-object"><option value="">Objekt (optional)</option></select>' +
+      '  <input id="clp-author" type="text" placeholder="Name (optional)" maxlength="60">' +
+      '  <textarea id="clp-text" placeholder="Kommentar …" rows="2"></textarea>' +
+      '  <button id="clp-send">Senden</button>' +
+      '</div>';
     document.body.appendChild(panel);
+    /* Senden-Button hier verdrahten (Panel wird lazy gebaut) */
+    var sendBtn = panel.querySelector("#clp-send");
+    if (sendBtn) sendBtn.addEventListener("click", function () {
+      var textEl = el("clp-text");
+      var text = textEl ? textEl.value.trim() : "";
+      if (!text) { if (textEl) textEl.focus(); return; }
+      var authorEl = el("clp-author");
+      var author = (authorEl && authorEl.value ? authorEl.value.trim() : "") || "Anonym";
+      var objSel = el("clp-object");
+      var excal_id = objSel ? objSel.value : "";
+      fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: filename,
+          author: author,
+          text: text,
+          quote: "",
+          excal_id: excal_id || null
+        })
+      }).then(function (r) { return r.json(); }).then(function () {
+        if (textEl) textEl.value = "";
+        loadComments();
+      });
+    });
     return panel;
   }
 
@@ -38,9 +69,12 @@
     return btn;
   }
 
+  var _refreshExcal = null;
+
   function showListPanel() {
     var panel = el("comment-list-panel") || buildListPanel();
     panel.hidden = false;
+    if (_refreshExcal) _refreshExcal();
     renderList();
   }
 
@@ -73,7 +107,16 @@
 
       var meta = document.createElement("div");
       meta.className = "clp-meta";
-      meta.textContent = (c.author || "Anonym") + " · " + (c.created || "").replace("T", " ");
+      var label = (c.author || "Anonym") + " · " + (c.created || "").replace("T", " ");
+      if (c.card_ref !== null && c.card_ref !== undefined) {
+        label += " · Karte " + (parseInt(c.card_ref, 10) + 1);
+      }
+      if (c.excal_id) {
+        var objs = window.__EXCAL_OBJECTS__ || [];
+        var match = objs.filter(function (o) { return o.id === c.excal_id; })[0];
+        label += " · Objekt: " + (match ? match.label : c.excal_id);
+      }
+      meta.textContent = label;
       item.appendChild(meta);
 
       var body = document.createElement("div");
@@ -172,7 +215,10 @@
         filename: filename,
         author: author || "Anonym",
         text: text,
-        quote: quote
+        quote: quote,
+        card_ref: (document.body && document.body.dataset.fcCard !== undefined)
+          ? parseInt(document.body.dataset.fcCard, 10)
+          : null
       }),
     })
       .then(function (r) { return r.json(); })
@@ -278,16 +324,26 @@
       }
     });
 
-    /* Setze neue Highlights für jeden Kommentar mit quote */
+    /* Setze neue Highlights für jeden Kommentar mit quote.
+       Karten-Kommentare (card_ref) werden nur auf der aktiven Karte geankert. */
+    var activeCard = (document.body && document.body.dataset.fcCard !== undefined)
+      ? parseInt(document.body.dataset.fcCard, 10) : null;
+    var cardFace = (activeCard !== null) ? document.getElementById("front") : null;
     allComments.forEach(function (c) {
       if (!c.quote) return;
-      highlightText(c.quote, c.id);
+      if (c.card_ref !== null && c.card_ref !== undefined) {
+        if (c.card_ref !== activeCard) return;      /* andere Karte → nicht ankern */
+        if (cardFace) highlightText(c.quote, c.id, cardFace);
+      } else {
+        highlightText(c.quote, c.id);
+      }
     });
   }
 
-  function highlightText(quote, commentId) {
+  function highlightText(quote, commentId, root) {
+    root = root || document.body;
     var walker = document.createTreeWalker(
-      document.body,
+      root,
       window.NodeFilter.SHOW_TEXT,
       {
         acceptNode: function (node) {
@@ -438,6 +494,31 @@
     /* Thread schließen */
     var closeThread = el("thread-close");
     if (closeThread) closeThread.addEventListener("click", hideCommentThread);
+
+    /* Karten-Wechsel (Flashcards) → Highlights neu an die aktive Karte anker */
+    document.addEventListener("fc:cardchanged", renderHighlights);
+
+    /* Excalidraw-Objekt-Dropdown im Kommentar-Panel */
+    function isExcalPage() { return !!(window.ExcalidrawViewer || document.getElementById("excalidraw-app")); }
+    _refreshExcal = function refreshObjectSelect() {
+      var composer = el("clp-composer");
+      var sel = el("clp-object");
+      if (!sel || !composer) return;          /* Panel noch nicht gebaut */
+      if (!isExcalPage()) { composer.hidden = true; return; }
+      var objs = window.__EXCAL_OBJECTS__ || [];
+      var cur = sel.value;
+      sel.innerHTML = '<option value="">Objekt (optional)</option>';
+      objs.forEach(function (o) {
+        var opt = document.createElement("option");
+        opt.value = o.id;
+        opt.textContent = o.label;
+        sel.appendChild(opt);
+      });
+      if (cur) sel.value = cur;
+      composer.hidden = false;
+    }
+    _refreshExcal();
+    document.addEventListener("excal:objects", _refreshExcal);
 
     /* Laden */
     loadComments();

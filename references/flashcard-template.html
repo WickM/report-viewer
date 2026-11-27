@@ -4,24 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>[TITLE]</title>
+<link rel="stylesheet" href="/static/css/style.css">
 <style>
   :root { --bg:#1e1e28; --bg-card:#282832; --bg-hover:#343541; --border:#505050;
           --text:#e0e0e0; --muted:#808080; --accent:#8abeb7; --accent-hover:#a8d4cc;
           --ok:#b5bd68; --bad:#cc6666; --radius:6px; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text);
-         min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:24px 16px; }
-  h1 { font-size:1.3rem; margin:0 0 6px; color:var(--accent); }
+         min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:0 0 24px; }
+  header { width:100%; }
+   header h1 { font-size:1.4rem; color:var(--text); }
   .sub { color:var(--muted); font-size:.9rem; margin-bottom:20px; }
   .progress { width:100%; max-width:560px; height:8px; background:var(--bg-card); border-radius:4px; overflow:hidden; margin-bottom:12px; }
   .progress > div { height:100%; background:var(--accent); width:0%; transition:width .3s; }
   .counter { color:var(--muted); font-size:.85rem; margin-bottom:16px; }
-  .scene { width:100%; max-width:560px; perspective:1200px; height:300px; }
+  .scene { width:100%; max-width:560px; perspective:1200px; height:300px; max-height:60vh; }
   .fc-card { position:relative; width:100%; height:100%; transition:transform .5s; transform-style:preserve-3d; cursor:pointer; }
   .fc-card.flipped { transform:rotateY(180deg); }
   .face { position:absolute; inset:0; backface-visibility:hidden; background:var(--bg-card);
           border:1px solid var(--border); border-radius:var(--radius); display:flex;
-          align-items:center; justify-content:center; padding:24px; text-align:center; font-size:1.1rem; line-height:1.45; }
+          align-items:flex-start; justify-content:center; padding:24px; text-align:center; font-size:1.1rem; line-height:1.45; overflow-y:auto; }
   .face.back { transform:rotateY(180deg); background:var(--bg-hover); }
   .label { position:absolute; top:10px; left:14px; font-size:.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
   .actions { display:flex; gap:12px; margin-top:20px; min-height:48px; }
@@ -39,7 +41,10 @@
 </style>
 </head>
 <body>
-  <h1>[TITLE]</h1>
+  <header>
+    <a href="/">← Übersicht</a>
+    <h1>[TITLE]</h1>
+  </header>
   <div class="sub">Karte antippen zum Umdrehen, dann selbst bewerten.</div>
   <div class="progress"><div id="bar"></div></div>
   <div class="counter" id="counter"></div>
@@ -81,6 +86,8 @@ function show(){
   $("back").textContent = c.a;
   $("card").classList.remove("flipped");
   flipped = false;
+  markActiveCard();
+  document.dispatchEvent(new CustomEvent("fc:cardchanged"));
   $("counter").textContent = `Karte ${idx+1} von ${CARDS.length}`;
   $("bar").style.width = (idx/CARDS.length*100) + "%";
   $("btnOk").disabled = true; $("btnBad").disabled = true;
@@ -112,6 +119,30 @@ function finish(){
   $("done").style.display = "block";
   const pct = Math.round(ok/CARDS.length*100);
   $("score").textContent = `${ok} / ${CARDS.length} richtig (${pct}%)`;
+  saveResult();
+}
+
+function saveResult(){
+  const payload = {
+    filename: window.__REPORT_FILENAME__ || "",
+    type: "flashcard",
+    quiz_id: window.__QUIZ_ID__ || "",
+    score: ok,
+    total: CARDS.length,
+    cards: Array.from({ length: CARDS.length }, (_, i) => i)
+  };
+  fetch("/api/quiz/result", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      $("score").textContent += d
+        ? " · ✓ gespeichert"
+        : " · ⚠ nicht gespeichert";
+    })
+    .catch(function () { $("score").textContent += " · ⚠ nicht gespeichert"; });
 }
 
 function restart(){
@@ -126,6 +157,11 @@ $("card").addEventListener("click", flip);
 $("btnOk").addEventListener("click", () => rate(true));
 $("btnBad").addEventListener("click", () => rate(false));
 $("restart").addEventListener("click", restart);
+
+/* Aktive Karte für die Kommentar-Anker (comments.js liest document.body.dataset.fcCard) */
+function markActiveCard(){
+  document.body.dataset.fcCard = order[idx];
+}
 restart();
 </script>
 </body>
