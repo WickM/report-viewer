@@ -161,6 +161,7 @@ Use the standalone template for simple right/wrong decks; use the quiz template'
 ### 4.6 Excalidraw (autosave + object comments)
 
 - **Autosave:** edits on an Excalidraw board persist automatically. The client debounces (800 ms) and POSTs the scene to `POST /api/reports/<filename>/excalidraw`; on load the viewer fetches `GET /api/reports/<filename>/excalidraw` and restores the saved scene if present (else the original from the report). The scene is stored in a sidecar `<filename>.excalidraw.json` next to the report; deleting the report also deletes the sidecar.
+- **⚠️ Re-publishing a board (desired overhaul):** the sidecar takes precedence over the report's original on load. If you re-publish a board with a new/changed scene (e.g. to apply feedback, re-theme, or restructure), you **must delete the sidecar first** — otherwise the viewer keeps showing the user's old autosaved scene and your new original never appears. Delete it with `rm ~/.report_viewer/reports/<filename>.html.excalidraw.json` (or `del` on Windows) before/after the re-publish. This is a "reset to the freshly published board".
 - **Object comments:** the 💬 comment panel on an Excalidraw page has an object dropdown. Picking an object tags the comment with `excal_id` (the element id), shown in the list as `· Objekt: <label>`. Text elements are labeled by their content; other shapes by type + index.
 
 ### 4.7 Theming (change the look on a user's behalf)
